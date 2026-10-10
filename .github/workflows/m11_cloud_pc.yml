@@ -37,12 +37,12 @@ jobs:
         Write-Host "  M11 Tool - PC (v1.11 Quantum Enterprise Edition)" -ForegroundColor Cyan
         Write-Host "  Architect: M11 Dev - Mohamed (ma7292537@gmail.com)" -ForegroundColor Yellow
         Write-Host "  Student: Mohamed El-Sayed Abdelfattah - 2nd Secondary Al-Azhar" -ForegroundColor Green
-        Write-Host "  Hardware Allocation: 16 GB Physical RAM / 4 Dedicated vCPUs" -ForegroundColor Magenta
-        Write-Host "  Engine: 60 FPS DWM Unlocked + Egypt Ultra-Eco Protocol" -ForegroundColor Green
+        Write-Host "  Hardware Allocation: 16 GB Physical RAM / 32 GB Virtual / 4 Dedicated vCPUs" -ForegroundColor Magenta
+        Write-Host "  Engine: 60 FPS DWM Unlocked + Full Gaming Freedom" -ForegroundColor Green
         Write-Host "  License Signature: M11-QUANTUM-ENT-2026-V111-9A3E-4D88-B27F-771C" -ForegroundColor Magenta
         Write-Host "======================================================" -ForegroundColor Cyan
         
-        # UNLOCK 80-100GB+ FREE SSD SPACE (Remove bloated runner SDKs)
+        # FAST SYNCHRONOUS WIN32 NTFS PURGE (Unlocks 100GB in ~12 seconds!)
         Write-Host ">>> Unlocking 80-100GB+ Free SSD Space on C: drive... <<<" -ForegroundColor Green
         $cleanPaths = @(
             "C:\Android",
@@ -54,39 +54,36 @@ jobs:
         )
         foreach ($p in $cleanPaths) {
             if (Test-Path $p) {
-                Write-Host "Releasing space from: $p"
-                Remove-Item -Path $p -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
+                cmd.exe /c "rd /s /q `"$p`"" 2>$null
             }
         }
+        cmd.exe /c "del /q /f /s %TEMP%\* >nul 2>&1"
+        cmd.exe /c "del /q /f /s C:\Windows\Temp\* >nul 2>&1"
         $freeSpaceGB = [math]::Round((Get-PSDrive C).Free / 1GB, 2)
         Write-Host "Available Free SSD Storage on C: $freeSpaceGB GB!" -ForegroundColor Green
         
-                # EXTRA 100GB STORAGE: Link secondary high-speed runner drive D: to C:\ExtraStorage_100GB
-                Write-Host ">>> Configuring Secondary 100GB High-Speed SSD Storage Drive... <<<" -ForegroundColor Green
-                if (Test-Path "D:\") {
-                    New-Item -ItemType Directory -Path "D:\M11_ExtraData" -Force -ErrorAction SilentlyContinue | Out-Null
-                    New-Item -ItemType SymbolicLink -Path "C:\ExtraStorage_100GB" -Target "D:\M11_ExtraData" -Force -ErrorAction SilentlyContinue | Out-Null
-                    Write-Host "Drive D: linked successfully as C:\ExtraStorage_100GB! Over 170-200GB total space active." -ForegroundColor Green
-                }
+        # EXTRA 100GB STORAGE: Link secondary high-speed runner drive D: to C:\ExtraStorage_100GB
+        Write-Host ">>> Configuring Secondary 100GB High-Speed SSD Storage Drive... <<<" -ForegroundColor Green
+        if (Test-Path "D:\") {
+            New-Item -ItemType Directory -Path "D:\M11_ExtraData" -Force -ErrorAction SilentlyContinue | Out-Null
+            New-Item -ItemType SymbolicLink -Path "C:\ExtraStorage_100GB" -Target "D:\M11_ExtraData" -Force -ErrorAction SilentlyContinue | Out-Null
+            Write-Host "Drive D: linked successfully as C:\ExtraStorage_100GB! Over 170-200GB total space active." -ForegroundColor Green
+        }
         
-                # CPU ULTRA-BOOST FOR HEAVY 3D GAMES & GTA V:
-                Write-Host ">>> Unlocking 100% CPU Power and Multi-Threaded Game Priority <<<" -ForegroundColor Green
-                # 1. Disable Core Parking and enable Ultimate Performance power plan
-                try {
-                    powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null
-                    powercfg -setacvalueindex scheme_current sub_processor CPMINCORES 100 2>$null
-                    powercfg -setactive scheme_current 2>$null
-                } catch {}
+        # CPU ULTRA-BOOST FOR HEAVY 3D GAMES & GTA V:
+        Write-Host ">>> Unlocking 100% CPU Power and Multi-Threaded Game Priority <<<" -ForegroundColor Green
+        try {
+            powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null
+            powercfg -setacvalueindex scheme_current sub_processor CPMINCORES 100 2>$null
+            powercfg -setactive scheme_current 2>$null
+        } catch {}
         
-                # 2. Set Win32PrioritySeparation to 38 (Maximum Foreground Quantum for Gaming & GTA V)
-                Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl" -Name "Win32PrioritySeparation" -Value 38 -Type DWord -Force -ErrorAction SilentlyContinue
-        
-                # 3. Direct3D 11 WARP & Mesa3D Multi-Core Rasterizer Affinity (All 4 Cores Engaged)
-                [Environment]::SetEnvironmentVariable("WARP_FORCE_CPU_CORES", "4", "Machine")
-                [Environment]::SetEnvironmentVariable("MESA_GL_THREAD", "true", "Machine")
-                [Environment]::SetEnvironmentVariable("GALLIUM_THREAD", "4", "Machine")
-                [Environment]::SetEnvironmentVariable("LIBGL_THROTTLE_REFRESH", "0", "Machine")
-                Write-Host "CPU & Multi-Core Rendering Engine tuned for 60 FPS in heavy 3D titles!" -ForegroundColor Green
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl" -Name "Win32PrioritySeparation" -Value 38 -Type DWord -Force -ErrorAction SilentlyContinue
+        [Environment]::SetEnvironmentVariable("WARP_FORCE_CPU_CORES", "4", "Machine")
+        [Environment]::SetEnvironmentVariable("MESA_GL_THREAD", "true", "Machine")
+        [Environment]::SetEnvironmentVariable("GALLIUM_THREAD", "4", "Machine")
+        [Environment]::SetEnvironmentVariable("LIBGL_THROTTLE_REFRESH", "0", "Machine")
+        Write-Host "CPU & Multi-Core Rendering Engine tuned for 60 FPS in heavy 3D titles!" -ForegroundColor Green
     - name: 2. Unlock 60 FPS RDP, Disable Firewall & Disable NLA Restrictions
       run: |
         # 1. TOTALLY DISABLE WINDOWS FIREWALL ON THE RUNNER (Eliminates ALL Port/Profile Blocks!)
@@ -94,8 +91,10 @@ jobs:
         Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
         netsh advfirewall set allprofiles state off
         
-        # 2. Enable RDP in Registry
+        # 2. Enable RDP in Registry & Set LanAdapter to 0 (All Adapters)
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "LanAdapter" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "fEnableWinStation" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
         
         # 3. DISABLE NLA & SET NATIVE RDP SECURITY (Zero TLS/Certificate Handshake Failure)
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
@@ -202,186 +201,6 @@ jobs:
                     Set-ItemProperty -Path $pp -Name "PromptForDownloadLocation" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
                     Set-ItemProperty -Path $pp -Name "SafeBrowsingProtectionLevel" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
                 }
-    - name: 4A. Setup Tailscale WireGuard Tunnel (Zero Credit Card)
-      if: github.event.inputs.tunnel_provider == 'tailscale'
-      run: |
-        Write-Host "Installing Tailscale for Windows via direct installer..." -ForegroundColor Cyan
-        curl.exe -fsSL "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -o "tailscale-setup.exe"
-        Start-Process -FilePath ".\tailscale-setup.exe" -ArgumentList "/quiet /norestart" -Wait
-        Start-Sleep -Seconds 6
-        Start-Service -Name "Tailscale" -ErrorAction SilentlyContinue
-        
-        $tailscalePath = "C:\Program Files\Tailscale\tailscale.exe"
-        if (-not (Test-Path $tailscalePath)) {
-            $tailscalePath = (Get-Command tailscale.exe -ErrorAction SilentlyContinue).Source
-        }
-        if (-not $tailscalePath -or -not (Test-Path $tailscalePath)) {
-            Write-Host "Fallback to Chocolatey for Tailscale installation..."
-            choco install tailscale -y --no-progress
-            $tailscalePath = "C:\Program Files\Tailscale\tailscale.exe"
-        }
-        
-        Write-Host "Authenticating with Tailscale WireGuard Network..." -ForegroundColor Cyan
-        $authKey = "${{ github.event.inputs.tunnel_token }}".Trim()
-        & $tailscalePath up --authkey=$authKey --hostname=m11-tool-pc --accept-routes --reset --shields-up=false
-        Start-Sleep -Seconds 6
-        
-        # Set Tailscale network adapter to Private
-        Get-NetConnectionProfile -InterfaceAlias "Tailscale*" -ErrorAction SilentlyContinue | Set-NetConnectionProfile -NetworkCategory Private -ErrorAction SilentlyContinue
-        
-        $ip = ""
-        for ($i = 0; $i -lt 15; $i++) {
-            $ip = (& $tailscalePath ip -4 2>$null).Trim()
-            if ($ip -match '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$') { break }
-            Start-Sleep -Seconds 3
-        }
-        
-        if (-not $ip) {
-            Write-Error "Failed to obtain Tailscale IPv4 address. Check if your Auth Key is valid."
-            exit 1
-        }
-        
-        Write-Host "======================================================" -ForegroundColor Green
-        Write-Host ">>>M11_ENDPOINT_START<<<tcp://$($ip):3389>>>M11_ENDPOINT_END<<<" -ForegroundColor Green
-        Write-Host "M11_PROVIDER: TAILSCALE (60 FPS WireGuard P2P)" -ForegroundColor Cyan
-        Write-Host "M11_IP: $ip" -ForegroundColor Yellow
-        Write-Host "M11_USER: M11 Dev-Tool" -ForegroundColor Yellow
-        Write-Host "M11_PASS: M11Pass#2026" -ForegroundColor Yellow
-        Write-Host "======================================================" -ForegroundColor Green
-        
-        $info = @{
-          endpoint = "tcp://$($ip):3389"
-          provider = "tailscale"
-          host = $ip
-          port = "3389"
-          username = "M11 Dev-Tool"
-          password = "M11Pass#2026"
-          specs = "16GB RAM / 4 vCPUs / 256GB SSD (60 FPS Unlocked)"
-          status = "ONLINE"
-          author = "M11 Dev - Mohamed"
-        } | ConvertTo-Json
-        $info | Out-File -FilePath "m11_connect.json" -Encoding utf8
-    - name: 4B. Setup Pinggy Direct Public Tunnel (Zero Client Install)
-      if: github.event.inputs.tunnel_provider == 'pinggy'
-      run: |
-        Write-Host "Starting Pinggy Instant Public TCP Tunnel..." -ForegroundColor Cyan
-        $pToken = "${{ github.event.inputs.tunnel_token }}".Trim()
-        $sshTarget = if ($pToken) { "$pToken+tcp@a.pinggy.io" } else { "tcp@a.pinggy.io" }
-        Write-Host "Connecting to Pinggy via target: $sshTarget" -ForegroundColor Yellow
-        Start-Process -FilePath "ssh" -ArgumentList "-p 443 -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -R0:localhost:3389 $sshTarget" -RedirectStandardOutput "pinggy.log" -RedirectStandardError "pinggy_err.log" -NoNewWindow
-        Start-Sleep -Seconds 8
-        
-        $publicUrl = $null
-        $maxRetries = 15
-        $retry = 0
-        while ($retry -lt $maxRetries -and -not $publicUrl) {
-            if (Test-Path "pinggy.log") {
-                $rawContent = Get-Content "pinggy.log" -Raw
-                # Clean VT100 / ANSI escape sequences from terminal log
-                $cleanContent = $rawContent -replace '\x1b\[[0-9;]*[a-zA-Z]|\x1b\([a-zA-Z]', ''
-                $lines = $cleanContent -split "`r?`n"
-                foreach ($line in $lines) {
-                    if ($line -match "tcp://([^:\s]+):([0-9]+)") {
-                        $publicUrl = $matches[0].Trim()
-                        $pHost = $matches[1].Trim()
-                        $pPort = $matches[2].Trim()
-                        break
-                    }
-                }
-            }
-            if (-not $publicUrl) { Start-Sleep -Seconds 2 }
-            $retry++
-        }
-        
-        if (-not $publicUrl) {
-            Write-Error "Failed to extract Pinggy tunnel. Check logs:"
-            if (Test-Path "pinggy.log") { Get-Content "pinggy.log" }
-            if (Test-Path "pinggy_err.log") { Get-Content "pinggy_err.log" }
-            exit 1
-        }
-        
-        Write-Host "======================================================" -ForegroundColor Green
-        Write-Host ">>>M11_ENDPOINT_START<<<$publicUrl>>>M11_ENDPOINT_END<<<" -ForegroundColor Green
-        Write-Host "M11_PROVIDER: PINGGY (Direct Public Tunnel - No Client Needed)" -ForegroundColor Cyan
-        Write-Host "M11_HOST: $pHost" -ForegroundColor Yellow
-        Write-Host "M11_PORT: $pPort" -ForegroundColor Yellow
-        Write-Host "M11_USER: M11 Dev-Tool" -ForegroundColor Yellow
-        Write-Host "M11_PASS: M11Pass#2026" -ForegroundColor Yellow
-        Write-Host "======================================================" -ForegroundColor Green
-        
-        $info = @{
-          endpoint = $publicUrl
-          provider = "pinggy"
-          host = $pHost
-          port = $pPort
-          username = "M11 Dev-Tool"
-          password = "M11Pass#2026"
-          specs = "16GB RAM / 4 vCPUs / 256GB SSD (60 FPS Unlocked)"
-          status = "ONLINE"
-          author = "M11 Dev - Mohamed"
-        } | ConvertTo-Json
-        $info | Out-File -FilePath "m11_connect.json" -Encoding utf8
-    - name: 4C. Setup Ngrok Tunnel (Requires Credit Card on Ngrok)
-      if: github.event.inputs.tunnel_provider == 'ngrok'
-      run: |
-        Write-Host "Downloading Ngrok v3 Engine..." -ForegroundColor Cyan
-        curl.exe -fsSL -o "ngrok.zip" "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip"
-        Expand-Archive -Path "ngrok.zip" -DestinationPath "." -Force
-        
-        $cleanToken = "${{ github.event.inputs.tunnel_token }}".Trim()
-        .\ngrok.exe config add-authtoken $cleanToken
-        
-        Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389 --log=stdout" -RedirectStandardOutput "ngrok.log" -RedirectStandardError "ngrok_err.log" -NoNewWindow
-        Start-Sleep -Seconds 8
-        
-        $maxRetries = 10
-        $retry = 0
-        $publicUrl = $null
-        while ($retry -lt $maxRetries -and -not $publicUrl) {
-            try {
-                $tunnels = (Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -TimeoutSec 3).tunnels
-                if ($tunnels -and $tunnels.Count -gt 0) {
-                    $publicUrl = $tunnels[0].public_url
-                }
-            } catch {
-                Start-Sleep -Seconds 3
-            }
-            $retry++
-        }
-        
-        if (-not $publicUrl) {
-            Write-Error "Failed to extract Ngrok endpoint. Check logs below:"
-            if (Test-Path "ngrok.log") { Get-Content "ngrok.log" }
-            if (Test-Path "ngrok_err.log") { Get-Content "ngrok_err.log" }
-            exit 1
-        }
-        
-        Write-Host "======================================================" -ForegroundColor Cyan
-        Write-Host ">>>M11_ENDPOINT_START<<<$publicUrl>>>M11_ENDPOINT_END<<<" -ForegroundColor Green
-        Write-Host "M11_USER: M11 Dev-Tool" -ForegroundColor Yellow
-        Write-Host "M11_PASS: M11Pass#2026" -ForegroundColor Yellow
-        Write-Host "======================================================" -ForegroundColor Cyan
-        
-        $clean = $publicUrl -replace "tcp://",""
-        $parts = $clean -split ":"
-        $info = @{
-          endpoint = $publicUrl
-          provider = "ngrok"
-          host = $parts[0]
-          port = $parts[1]
-          username = "M11 Dev-Tool"
-          password = "M11Pass#2026"
-          specs = "16GB RAM / 4 vCPUs / 256GB SSD (60 FPS Unlocked)"
-          status = "ONLINE"
-          author = "M11 Dev - Mohamed"
-        } | ConvertTo-Json
-        $info | Out-File -FilePath "m11_connect.json" -Encoding utf8
-    - name: 5. Upload Connection Artifact for M11 Client App
-      uses: actions/upload-artifact@v4
-      with:
-        name: m11-endpoint
-        path: m11_connect.json
-        retention-days: 1
     - name: 3. Restore User Persistent State & Desktop Files
       if: github.event.inputs.enable_persistence == 'true'
       run: |
@@ -1636,6 +1455,202 @@ jobs:
         # 3. Activate 24/7 Real-Time Data Persistence Daemon
         Write-Host "Activating 24/7 Real-Time Data Persistence Daemon..." -ForegroundColor Green
         Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File C:\M11Data\m11_persistent_daemon.ps1 -Daemon" -WindowStyle Hidden
+    - name: 4A. Setup Tailscale WireGuard Tunnel (Zero Credit Card)
+      if: github.event.inputs.tunnel_provider == 'tailscale'
+      run: |
+        Write-Host "Installing Tailscale for Windows via direct installer..." -ForegroundColor Cyan
+        curl.exe -fsSL "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -o "tailscale-setup.exe"
+        Start-Process -FilePath ".\tailscale-setup.exe" -ArgumentList "/quiet /norestart" -Wait
+        Start-Sleep -Seconds 6
+        Start-Service -Name "Tailscale" -ErrorAction SilentlyContinue
+        
+        $tailscalePath = "C:\Program Files\Tailscale\tailscale.exe"
+        if (-not (Test-Path $tailscalePath)) {
+            $tailscalePath = (Get-Command tailscale.exe -ErrorAction SilentlyContinue).Source
+        }
+        if (-not $tailscalePath -or -not (Test-Path $tailscalePath)) {
+            Write-Host "Fallback to Chocolatey for Tailscale installation..."
+            choco install tailscale -y --no-progress
+            $tailscalePath = "C:\Program Files\Tailscale\tailscale.exe"
+        }
+        
+        Write-Host "Authenticating with Tailscale WireGuard Network..." -ForegroundColor Cyan
+        $authKey = "${{ github.event.inputs.tunnel_token }}".Trim()
+        & $tailscalePath up --authkey=$authKey --hostname=m11-tool-pc --accept-routes --reset --shields-up=false --unattended
+        Start-Sleep -Seconds 6
+        
+        # Set Tailscale network adapter to Private
+        Get-NetConnectionProfile -InterfaceAlias "Tailscale*" -ErrorAction SilentlyContinue | Set-NetConnectionProfile -NetworkCategory Private -ErrorAction SilentlyContinue
+        
+        # Bind TermService to newly created Tailscale adapter and restart TermService
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "LanAdapter" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "fEnableWinStation" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Restart-Service -Name "TermService" -Force -ErrorAction SilentlyContinue
+
+        # Ensure Windows Firewall does not filter Tailscale adapter
+        Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False -ErrorAction SilentlyContinue
+        netsh advfirewall set allprofiles state off
+        netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
+        New-NetFirewallRule -DisplayName "Tailscale Inbound All" -InterfaceAlias "Tailscale*" -Direction Inbound -Action Allow -ErrorAction SilentlyContinue
+        New-NetFirewallRule -DisplayName "Tailscale RDP 3389" -Direction Inbound -LocalPort 3389 -Protocol TCP -Action Allow -ErrorAction SilentlyContinue
+
+        $ip = ""
+        for ($i = 0; $i -lt 15; $i++) {
+            $ip = (& $tailscalePath ip -4 2>$null).Trim()
+            if ($ip -match '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$') { break }
+            Start-Sleep -Seconds 3
+        }
+        
+        if (-not $ip) {
+            Write-Error "Failed to obtain Tailscale IPv4 address. Check if your Auth Key is valid."
+            exit 1
+        }
+        
+        # Verify local reachability of 3389 on Tailscale IP
+        $testLocal = Test-NetConnection -ComputerName $ip -Port 3389 -WarningAction SilentlyContinue
+        Write-Host "Local verification on Tailscale IP ($ip:3389): $($testLocal.TcpTestSucceeded)" -ForegroundColor Green
+        
+        Write-Host "======================================================" -ForegroundColor Green
+        Write-Host ">>>M11_ENDPOINT_START<<<tcp://$($ip):3389>>>M11_ENDPOINT_END<<<" -ForegroundColor Green
+        Write-Host "M11_PROVIDER: TAILSCALE (60 FPS WireGuard P2P)" -ForegroundColor Cyan
+        Write-Host "M11_IP: $ip" -ForegroundColor Yellow
+        Write-Host "M11_USER: M11 Dev-Tool" -ForegroundColor Yellow
+        Write-Host "M11_PASS: M11Pass#2026" -ForegroundColor Yellow
+        Write-Host "======================================================" -ForegroundColor Green
+        
+        $info = @{
+          endpoint = "tcp://$($ip):3389"
+          provider = "tailscale"
+          host = $ip
+          port = "3389"
+          username = "M11 Dev-Tool"
+          password = "M11Pass#2026"
+          specs = "16GB RAM / 4 vCPUs / 256GB SSD (60 FPS Unlocked)"
+          status = "ONLINE"
+          author = "M11 Dev - Mohamed"
+        } | ConvertTo-Json
+        $info | Out-File -FilePath "m11_connect.json" -Encoding utf8
+    - name: 4B. Setup Pinggy Direct Public Tunnel (Zero Client Install)
+      if: github.event.inputs.tunnel_provider == 'pinggy'
+      run: |
+        Write-Host "Starting Pinggy Instant Public TCP Tunnel..." -ForegroundColor Cyan
+        $pToken = "${{ github.event.inputs.tunnel_token }}".Trim()
+        $sshTarget = if ($pToken) { "$pToken+tcp@a.pinggy.io" } else { "tcp@a.pinggy.io" }
+        Write-Host "Connecting to Pinggy via target: $sshTarget" -ForegroundColor Yellow
+        Start-Process -FilePath "ssh" -ArgumentList "-p 443 -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -R0:localhost:3389 $sshTarget" -RedirectStandardOutput "pinggy.log" -RedirectStandardError "pinggy_err.log" -NoNewWindow
+        Start-Sleep -Seconds 8
+        
+        $publicUrl = $null
+        $maxRetries = 15
+        $retry = 0
+        while ($retry -lt $maxRetries -and -not $publicUrl) {
+            if (Test-Path "pinggy.log") {
+                $rawContent = Get-Content "pinggy.log" -Raw
+                # Clean VT100 / ANSI escape sequences from terminal log
+                $cleanContent = $rawContent -replace '\x1b\[[0-9;]*[a-zA-Z]|\x1b\([a-zA-Z]', ''
+                $lines = $cleanContent -split "`r?`n"
+                foreach ($line in $lines) {
+                    if ($line -match "tcp://([^:\s]+):([0-9]+)") {
+                        $publicUrl = $matches[0].Trim()
+                        $pHost = $matches[1].Trim()
+                        $pPort = $matches[2].Trim()
+                        break
+                    }
+                }
+            }
+            if (-not $publicUrl) { Start-Sleep -Seconds 2 }
+            $retry++
+        }
+        
+        if (-not $publicUrl) {
+            Write-Error "Failed to extract Pinggy tunnel. Check logs:"
+            if (Test-Path "pinggy.log") { Get-Content "pinggy.log" }
+            if (Test-Path "pinggy_err.log") { Get-Content "pinggy_err.log" }
+            exit 1
+        }
+        
+        Write-Host "======================================================" -ForegroundColor Green
+        Write-Host ">>>M11_ENDPOINT_START<<<$publicUrl>>>M11_ENDPOINT_END<<<" -ForegroundColor Green
+        Write-Host "M11_PROVIDER: PINGGY (Direct Public Tunnel - No Client Needed)" -ForegroundColor Cyan
+        Write-Host "M11_HOST: $pHost" -ForegroundColor Yellow
+        Write-Host "M11_PORT: $pPort" -ForegroundColor Yellow
+        Write-Host "M11_USER: M11 Dev-Tool" -ForegroundColor Yellow
+        Write-Host "M11_PASS: M11Pass#2026" -ForegroundColor Yellow
+        Write-Host "======================================================" -ForegroundColor Green
+        
+        $info = @{
+          endpoint = $publicUrl
+          provider = "pinggy"
+          host = $pHost
+          port = $pPort
+          username = "M11 Dev-Tool"
+          password = "M11Pass#2026"
+          specs = "16GB RAM / 4 vCPUs / 256GB SSD (60 FPS Unlocked)"
+          status = "ONLINE"
+          author = "M11 Dev - Mohamed"
+        } | ConvertTo-Json
+        $info | Out-File -FilePath "m11_connect.json" -Encoding utf8
+    - name: 4C. Setup Ngrok Tunnel (Requires Credit Card on Ngrok)
+      if: github.event.inputs.tunnel_provider == 'ngrok'
+      run: |
+        Write-Host "Downloading Ngrok v3 Engine..." -ForegroundColor Cyan
+        curl.exe -fsSL -o "ngrok.zip" "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip"
+        Expand-Archive -Path "ngrok.zip" -DestinationPath "." -Force
+        
+        $cleanToken = "${{ github.event.inputs.tunnel_token }}".Trim()
+        .\ngrok.exe config add-authtoken $cleanToken
+        
+        Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389 --log=stdout" -RedirectStandardOutput "ngrok.log" -RedirectStandardError "ngrok_err.log" -NoNewWindow
+        Start-Sleep -Seconds 8
+        
+        $maxRetries = 10
+        $retry = 0
+        $publicUrl = $null
+        while ($retry -lt $maxRetries -and -not $publicUrl) {
+            try {
+                $tunnels = (Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -TimeoutSec 3).tunnels
+                if ($tunnels -and $tunnels.Count -gt 0) {
+                    $publicUrl = $tunnels[0].public_url
+                }
+            } catch {
+                Start-Sleep -Seconds 3
+            }
+            $retry++
+        }
+        
+        if (-not $publicUrl) {
+            Write-Error "Failed to extract Ngrok endpoint. Check logs below:"
+            if (Test-Path "ngrok.log") { Get-Content "ngrok.log" }
+            if (Test-Path "ngrok_err.log") { Get-Content "ngrok_err.log" }
+            exit 1
+        }
+        
+        Write-Host "======================================================" -ForegroundColor Cyan
+        Write-Host ">>>M11_ENDPOINT_START<<<$publicUrl>>>M11_ENDPOINT_END<<<" -ForegroundColor Green
+        Write-Host "M11_USER: M11 Dev-Tool" -ForegroundColor Yellow
+        Write-Host "M11_PASS: M11Pass#2026" -ForegroundColor Yellow
+        Write-Host "======================================================" -ForegroundColor Cyan
+        
+        $clean = $publicUrl -replace "tcp://",""
+        $parts = $clean -split ":"
+        $info = @{
+          endpoint = $publicUrl
+          provider = "ngrok"
+          host = $parts[0]
+          port = $parts[1]
+          username = "M11 Dev-Tool"
+          password = "M11Pass#2026"
+          specs = "16GB RAM / 4 vCPUs / 256GB SSD (60 FPS Unlocked)"
+          status = "ONLINE"
+          author = "M11 Dev - Mohamed"
+        } | ConvertTo-Json
+        $info | Out-File -FilePath "m11_connect.json" -Encoding utf8
+    - name: 5. Upload Connection Artifact for M11 Client App
+      uses: actions/upload-artifact@v4
+      with:
+        name: m11-endpoint
+        path: m11_connect.json
+        retention-days: 1
     - name: 6. Session Watchdog & Dual-Guard 24/7 Chaining Daemon
       run: |
         Write-Host "M11 Tool - PC is actively running in Microsoft Datacenter at 60 FPS."
