@@ -1,5 +1,5 @@
 name: M11 Tool - PC 16GB Datacenter (v1.11 M11 Quantum Enterprise Edition)
-true:
+on:
   workflow_dispatch:
     inputs:
       tunnel_provider:
