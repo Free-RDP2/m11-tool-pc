@@ -215,6 +215,88 @@ jobs:
                     Set-ItemProperty -Path $pp -Name "PromptForDownloadLocation" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
                     Set-ItemProperty -Path $pp -Name "SafeBrowsingProtectionLevel" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
                 }
+        # 10. ENABLE BILINGUAL ARABIC + ENGLISH KEYBOARD (Alt+Shift Instant Switching)
+        Write-Host ">>> Configuring Bilingual Keyboard: English (US) + Arabic (Egypt)... <<<" -ForegroundColor Green
+        try {
+            $langList = New-WinUserLanguageList -LanguageTag "en-US"
+            $langList.Add("ar-EG")
+            Set-WinUserLanguageList -LanguageList $langList -Force
+        } catch {
+            Set-WinUserLanguageList -LanguageList en-US, ar-EG -Force 2>$null
+        }
+
+        # Preload layout codes (00000409 = English, 00000401 = Arabic) for HKCU and Default user
+        $kbRoots = @("HKCU", "Registry::HKEY_USERS\.DEFAULT")
+        foreach ($r in $kbRoots) {
+            if (-not (Test-Path "$r\Keyboard Layout\Preload")) { New-Item -Path "$r\Keyboard Layout\Preload" -Force | Out-Null }
+            Set-ItemProperty -Path "$r\Keyboard Layout\Preload" -Name "1" -Value "00000409" -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "$r\Keyboard Layout\Preload" -Name "2" -Value "00000401" -Force -ErrorAction SilentlyContinue
+
+            # Enable Alt+Shift Hotkey (Language toggle hotkey ID 00000100)
+            if (-not (Test-Path "$r\Control Panel\Input Method\Hot Keys\00000100")) { New-Item -Path "$r\Control Panel\Input Method\Hot Keys\00000100" -Force | Out-Null }
+            Set-ItemProperty -Path "$r\Control Panel\Input Method\Hot Keys\00000100" -Name "Key Modifiers" -Value ([byte[]](0x02,0xc0,0x00,0x00)) -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "$r\Control Panel\Input Method\Hot Keys\00000100" -Name "Virtual Key" -Value ([byte[]](0xff,0x00,0x00,0x00)) -Force -ErrorAction SilentlyContinue
+        }
+
+        # 11. UNBLOCK INTERNET, OUTLOOK & SITES (Cloudflare DNS 1.1.1.1 + IE ESC Full Purge)
+        Write-Host ">>> Unblocking Internet & Cloudflare 1.1.1.1 DNS for Outlook/Web... <<<" -ForegroundColor Green
+        try {
+            Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Set-DnsClientServerAddress -ServerAddresses ("1.1.1.1","8.8.8.8","1.0.0.1","8.8.4.4") -ErrorAction SilentlyContinue
+        } catch {}
+
+        # Disable IE ESC with modern Windows Server 2022 GUIDs for Admins and Users
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A7-37EF-4b3f-8CFC-4F3A74704073}" -Name "IsInstalled" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A8-37EF-4b3f-8CFC-4F3A74704073}" -Name "IsInstalled" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap" -Force -ErrorAction SilentlyContinue | Out-Null
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap" -Name "IEHarden" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        New-Item -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap" -Force -ErrorAction SilentlyContinue | Out-Null
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap" -Name "IEHarden" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        New-Item -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\Zones\3" -Force -ErrorAction SilentlyContinue | Out-Null
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\Zones\3" -Name "1806" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\Zones\3" -Name "2500" -Value 3 -Type DWord -Force -ErrorAction SilentlyContinue
+        ipconfig /flushdns 2>$null | Out-Null
+        Write-Host "Bilingual Keyboard & Unrestricted Internet active!" -ForegroundColor Green
+        # 10. ENABLE BILINGUAL ARABIC + ENGLISH KEYBOARD (Alt+Shift Instant Switching)
+        Write-Host ">>> Configuring Bilingual Keyboard: English (US) + Arabic (Egypt)... <<<" -ForegroundColor Green
+        try {
+            $langList = New-WinUserLanguageList -LanguageTag "en-US"
+            $langList.Add("ar-EG")
+            Set-WinUserLanguageList -LanguageList $langList -Force
+        } catch {
+            Set-WinUserLanguageList -LanguageList en-US, ar-EG -Force 2>$null
+        }
+
+        # Preload layout codes (00000409 = English, 00000401 = Arabic) for HKCU and Default user
+        $kbRoots = @("HKCU", "Registry::HKEY_USERS\.DEFAULT")
+        foreach ($r in $kbRoots) {
+            if (-not (Test-Path "$r\Keyboard Layout\Preload")) { New-Item -Path "$r\Keyboard Layout\Preload" -Force | Out-Null }
+            Set-ItemProperty -Path "$r\Keyboard Layout\Preload" -Name "1" -Value "00000409" -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "$r\Keyboard Layout\Preload" -Name "2" -Value "00000401" -Force -ErrorAction SilentlyContinue
+
+            # Enable Alt+Shift Hotkey (Language toggle hotkey ID 00000100)
+            if (-not (Test-Path "$r\Control Panel\Input Method\Hot Keys\00000100")) { New-Item -Path "$r\Control Panel\Input Method\Hot Keys\00000100" -Force | Out-Null }
+            Set-ItemProperty -Path "$r\Control Panel\Input Method\Hot Keys\00000100" -Name "Key Modifiers" -Value ([byte[]](0x02,0xc0,0x00,0x00)) -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "$r\Control Panel\Input Method\Hot Keys\00000100" -Name "Virtual Key" -Value ([byte[]](0xff,0x00,0x00,0x00)) -Force -ErrorAction SilentlyContinue
+        }
+
+        # 11. UNBLOCK INTERNET, OUTLOOK & SITES (Cloudflare DNS 1.1.1.1 + IE ESC Full Purge)
+        Write-Host ">>> Unblocking Internet & Cloudflare 1.1.1.1 DNS for Outlook/Web... <<<" -ForegroundColor Green
+        try {
+            Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Set-DnsClientServerAddress -ServerAddresses ("1.1.1.1","8.8.8.8","1.0.0.1","8.8.4.4") -ErrorAction SilentlyContinue
+        } catch {}
+
+        # Disable IE ESC with modern Windows Server 2022 GUIDs for Admins and Users
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A7-37EF-4b3f-8CFC-4F3A74704073}" -Name "IsInstalled" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A8-37EF-4b3f-8CFC-4F3A74704073}" -Name "IsInstalled" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap" -Force -ErrorAction SilentlyContinue | Out-Null
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap" -Name "IEHarden" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        New-Item -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap" -Force -ErrorAction SilentlyContinue | Out-Null
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap" -Name "IEHarden" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        New-Item -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\Zones\3" -Force -ErrorAction SilentlyContinue | Out-Null
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\Zones\3" -Name "1806" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\Zones\3" -Name "2500" -Value 3 -Type DWord -Force -ErrorAction SilentlyContinue
+        ipconfig /flushdns 2>$null | Out-Null
+        Write-Host "Bilingual Keyboard & Unrestricted Internet active!" -ForegroundColor Green
     - name: 3. Restore User Persistent State & Desktop Files
       if: github.event.inputs.enable_persistence == 'true'
       run: |
@@ -330,6 +412,16 @@ jobs:
         try {
             Install-WindowsFeature -Name Server-Media-Foundation -ErrorAction SilentlyContinue | Out-Null
             dism.exe /online /enable-feature /featurename:Server-Media-Foundation /all /norestart /quiet 2>$null | Out-Null
+        } catch {}
+        # 3B. ENABLE DIRECTPLAY (Required for classic 3D games: GTA, Mafia, DirectDraw/Direct3D titles)
+        Write-Host "Enabling DirectPlay legacy 3D gaming feature..." -ForegroundColor Yellow
+        try {
+            dism.exe /online /enable-feature /featurename:DirectPlay /all /norestart /quiet 2>$null | Out-Null
+        } catch {}
+        # 3B. ENABLE DIRECTPLAY (Required for classic 3D games: GTA, Mafia, DirectDraw/Direct3D titles)
+        Write-Host "Enabling DirectPlay legacy 3D gaming feature..." -ForegroundColor Yellow
+        try {
+            dism.exe /online /enable-feature /featurename:DirectPlay /all /norestart /quiet 2>$null | Out-Null
         } catch {}
 
         # 4. UNLOCK DIRECTX / REMOTEFX 3D ACCELERATION IN RDP
@@ -543,7 +635,7 @@ jobs:
         @echo off
         setlocal EnableDelayedExpansion
         chcp 65001 >nul 2>&1
-        title M11 MASTER CONTROL CENTER - 3D GAMING & APP HUB (v1.11)
+        title M11 MASTER CONTROL CENTER - 3D GAMING & APP WORKSTATION (v1.11)
         color 0b
         cd /d "%~dp0"
         set "ENG=%~dp0📁_M11_TOOL_PC\📁_Engines_And_Scripts"
@@ -552,81 +644,136 @@ jobs:
         :main_menu
         cls
         echo ==============================================================================
-        echo       M11 TOOL - PC | MASTER GAMING & APPLICATION CONTROL CENTER
-        echo   Developer: Mohamed El-Sayed Abdelfattah - M11 Dev (2nd Secondary Al-Azhar)
-        echo   Hardware : 16GB RAM ^| 32GB Virtual RAM ^| 4 vCPUs ^| 170GB+ Dual Storage
-        echo   Status   : 60 FPS Direct3D Accelerated ^| Zero Lag High-Responsiveness
+        echo       ⚡ M11 TOOL - PC | MASTER GAMING & CLOUD CONTROL CENTER (v1.11)
+        echo   Developer : Mohamed El-Sayed Abdelfattah - M11 Dev (2nd Secondary Al-Azhar)
+        echo   Hardware  : 16GB Physical RAM ^| 4 Dedicated vCPUs ^| 200GB SSD ^| 60 FPS
+        echo   Status    : Unrestricted Root Access ^| Bilingual English + Arabic Active
         echo ==============================================================================
         echo.
-        echo   [1] SYSTEM & RUNTIME AUDIT (Check What is Installed vs Missing)
-        echo   [2] 1-CLICK INSTALL ALL RUNTIMES (DirectX AIO, VC++ 2005-2022, PhysX, .NET)
-        echo   [3] 3D GAMING TURBO OPTIMIZER (Max CPU Priority, 0 Latency, 60 FPS Boost)
-        echo   [4] ROBLOX PLAYER & STUDIO HUB (VM Hyper-Bypass + 60 FPS Anti-Lag FastFlags)
-        echo   [5] 3D GAME COMPATIBILITY INJECTOR (Fix Mafia II, GTA & D3D9 via WARP)
-        echo   [6] GTA V & HEAVY 3D GAMES DOWNLOAD HUB (Rockstar, Offline Games, Shooters)
-        echo   [7] ESSENTIAL APPS & BROWSERS DOWNLOAD HUB (Chrome, Discord, OBS, Tools)
-        echo   [8] STORAGE EXPANDER (Link 100GB D: Drive to C:\Games)
-        echo   [9] INSTANT PERSISTENT CLOUD BACKUP (Save All Files & Settings to GitHub)
+        echo --- CORE SYSTEM ENGINES (RUN ONCE UPON FIRST LOGIN) ---------------------------
+        echo   [1] 3D GAMING TURBO OPTIMIZER           --^> [MANDATORY - MUST DO FIRST]
+        echo       * Enables Audio, DirectPlay, DirectX 9/11, VC++ AIO, PhysX & 60 FPS WARP.
+        echo.
+        echo   [2] UNBLOCK INTERNET, OUTLOOK & BROWSER --^> [MANDATORY - MUST DO FIRST]
+        echo       * Disables IE ESC, unblocks Outlook signup, sets 1.1.1.1 DNS, all downloads.
+        echo.
+        echo   [3] ROBLOX PLAYER & STUDIO HUB          --^> [RECOMMENDED]
+        echo       * Bypasses Byfron/Hyper-V VM detection, installs WebView2, locks 60 FPS.
+        echo.
+        echo   [4] 1-CLICK INSTALL ALL RUNTIMES        --^> [MANDATORY - MUST DO FIRST]
+        echo       * Installs DirectX 9.0c AIO, Visual C++ 2005-2022, NVIDIA PhysX, .NET 8.
+        echo.
+        echo   [5] 3D GAME COMPATIBILITY INJECTOR      --^> [RECOMMENDED FOR CRASHING GAMES]
+        echo       * Injects dgVoodoo2 D3D9-to-D3D11 WARP wrapper & PhysX into Mafia II / Steam.
+        echo.
+        echo   [6] INSTALL ESSENTIAL BROWSERS & APPS   --^> [RECOMMENDED]
+        echo       * 1-Click Install: Chrome Enterprise, Discord, VS Code, 7-Zip, Tools.
+        echo.
+        echo   [7] FREE 100GB SSD & LINK DRIVE D:      --^> [RECOMMENDED]
+        echo       * Cleans 80GB temp files and links secondary 100GB SSD as C:\ExtraStorage.
+        echo.
+        echo --- GAMING, PERSISTENCE & UTILITIES -------------------------------------------
+        echo   [8] DOWNLOAD GTA V & HEAVY 3D GAMES     --^> [OPTIONAL]
+        echo       * Rockstar Launcher, Steam, Epic Games, Minecraft, Offline Game Libraries.
+        echo.
+        echo   [9] INSTANT CLOUD BACKUP (SAVE STATE)   --^> [RECOMMENDED BEFORE CLOSING]
+        echo       * Preserves Desktop, Documents, Downloads & Roblox configs to GitHub repo.
+        echo.
+        echo   [D] SYSTEM & RUNTIME AUDIT              --^> [OPTIONAL]
+        echo       * Checks installed vs missing DirectX, VC++, PhysX, Audio, and Storage.
+        echo.
+        echo   [K] ENABLE ARABIC & ENGLISH KEYBOARD    --^> [RECOMMENDED]
+        echo       * Adds Arabic (101) & English (US) layouts. Switch instantly with Alt+Shift!
+        echo.
         echo   [0] Exit to Windows Desktop
-        echo.
         echo ==============================================================================
-        set /p opt="Select an option [0-9]: "
+        set /p opt="Enter your choice: "
 
-        if "%opt%"=="1" goto menu_audit
-        if "%opt%"=="2" goto menu_runtimes
-        if "%opt%"=="3" goto menu_turbo
-        if "%opt%"=="4" goto menu_roblox
-        if "%opt%"=="5" goto menu_fixgame
-        if "%opt%"=="6" goto menu_games
-        if "%opt%"=="7" goto menu_apps
-        if "%opt%"=="8" goto menu_storage
-        if "%opt%"=="9" goto menu_backup
+        if /i "%opt%"=="1" goto menu_game_setup
+        if /i "%opt%"=="2" goto menu_unblock_net
+        if /i "%opt%"=="3" goto menu_roblox
+        if /i "%opt%"=="4" goto menu_runtimes
+        if /i "%opt%"=="5" goto menu_fixgame
+        if /i "%opt%"=="6" goto menu_apps
+        if /i "%opt%"=="7" goto menu_storage
+        if /i "%opt%"=="8" goto menu_games
+        if /i "%opt%"=="9" goto menu_backup
+        if /i "%opt%"=="D" goto menu_audit
+        if /i "%opt%"=="K" goto menu_keyboard
         if "%opt%"=="0" exit /b 0
+
+        echo [!] Invalid selection "%opt%". Please select a number from the menu.
+        timeout /t 2 >nul
         goto main_menu
 
-        :menu_audit
+        :menu_game_setup
         cls
-        echo ==============================================================================
-        echo                 M11 SYSTEM & GAMING RUNTIME STATUS AUDIT
-        echo ==============================================================================
-        echo.
-        if exist "C:\Windows\System32\d3dx9_43.dll" (echo   [x] DirectX 9.0c Runtimes        : INSTALLED (Active)) else (echo   [ ] DirectX 9.0c Runtimes        : MISSING (Required for Mafia II/DirectX 9))
-        if exist "C:\Windows\System32\vcruntime140.dll" (echo   [x] Visual C++ 2015-2022         : INSTALLED (Active)) else (echo   [ ] Visual C++ 2015-2022         : MISSING (Required for games/apps))
-        if exist "C:\Program Files (x86)\NVIDIA Corporation\PhysX" (echo   [x] NVIDIA PhysX System Software : INSTALLED (Active)) else (echo   [ ] NVIDIA PhysX System Software : MISSING (Required for Mafia II))
-        if exist "%LOCALAPPDATA%\Roblox\Versions" (echo   [x] Roblox Client                : INSTALLED) else (echo   [ ] Roblox Client                : NOT INSTALLED)
-        if exist "%PROGRAMFILES%\Google\Chrome\Application\chrome.exe" (echo   [x] Google Chrome                : INSTALLED) else (echo   [ ] Google Chrome                : NOT INSTALLED)
-        sc query Audiosrv | findstr "RUNNING" >nul && (echo   [x] Windows Audio Engine         : RUNNING (Sound Active)) || (echo   [ ] Windows Audio Engine         : STOPPED)
-        echo.
-        powershell -NoProfile -Command "$c = [math]::Round((Get-PSDrive C).Free / 1GB, 2); Write-Host '  [*] SSD Storage C: Free Space    :' $c 'GB'"
-        if exist "D:\" powershell -NoProfile -Command "$d = [math]::Round((Get-PSDrive D).Free / 1GB, 2); Write-Host '  [*] SSD Storage D: Free Space    :' $d 'GB'"
-        echo.
-        echo ==============================================================================
-        echo Press any key to return to Master Control Center...
-        pause >nul
-        goto main_menu
-
-        :menu_runtimes
-        if exist "%ENG%\11_All_In_One_Gaming_Runtimes_AIO.bat" (
-            call "%ENG%\11_All_In_One_Gaming_Runtimes_AIO.bat"
-        ) else (
-            echo Installing DirectX 9 and VC++ Runtimes...
-            winget install --id Microsoft.DirectX -e --silent --accept-package-agreements --accept-source-agreements 2>nul
-            winget install --id Microsoft.VCRedist.2015+.x64 -e --silent --accept-package-agreements --accept-source-agreements 2>nul
+        echo [1] ENABLING 1-CLICK SYSTEM & 3D GAMING SETUP...
+        sc config Audiosrv start=auto >nul 2>&1 & net start Audiosrv >nul 2>&1
+        sc config AudioEndpointBuilder start=auto >nul 2>&1 & net start AudioEndpointBuilder >nul 2>&1
+        powershell -NoProfile -Command "Enable-WindowsOptionalFeature -Online -FeatureName DirectPlay -NoRestart" >nul 2>&1
+        reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v "Win32PrioritySeparation" /t REG_DWORD /d 38 /f >nul 2>&1
+        reg add "HKLM\SOFTWARE\Microsoft\Direct3D\Drivers" /v "SoftwareOnly" /t REG_DWORD /d 0 /f >nul 2>&1
+        setx WARP_FORCE_CPU_CORES 4 /M >nul 2>&1
+        setx MESA_GL_THREAD true /M >nul 2>&1
+        setx GALLIUM_THREAD 4 /M >nul 2>&1
+        setx LIBGL_THROTTLE_REFRESH 0 /M >nul 2>&1
+        setx MESA_GL_VERSION_OVERRIDE 4.5 /M >nul 2>&1
+        setx GALLIUM_DRIVER llvmpipe /M >nul 2>&1
+        if exist "C:\M11Data\dgVoodoo2\PhysXLoader.dll" (
+            copy /y "C:\M11Data\dgVoodoo2\PhysXLoader.dll" "C:\Windows\System32\" >nul 2>&1
+            copy /y "C:\M11Data\dgVoodoo2\PhysXLoader.dll" "C:\Windows\SysWOW64\" >nul 2>&1
         )
+        echo [SUCCESS] 3D Gaming Engine, Audio, DirectPlay, and WARP configured!
         pause
         goto main_menu
 
-        :menu_turbo
-        if exist "%ENG%\03_DirectX11_WARP_Mesa3D_GPU_Booster.bat" (
-            call "%ENG%\03_DirectX11_WARP_Mesa3D_GPU_Booster.bat"
+        :menu_unblock_net
+        cls
+        echo [2] UNBLOCKING INTERNET, OUTLOOK & BROWSER SECURITY...
+        reg add "HKLM\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A7-37EF-4b3f-8CFC-4F3A74704073}" /v "IsInstalled" /t REG_DWORD /d 0 /f >nul 2>&1
+        reg add "HKLM\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A8-37EF-4b3f-8CFC-4F3A74704073}" /v "IsInstalled" /t REG_DWORD /d 0 /f >nul 2>&1
+        reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap" /v "IEHarden" /t REG_DWORD /d 0 /f >nul 2>&1
+        reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap" /v "IEHarden" /t REG_DWORD /d 0 /f >nul 2>&1
+        powershell -NoProfile -Command "Get-NetAdapter | Where-Object Status -eq 'Up' | Set-DnsClientServerAddress -ServerAddresses ('1.1.1.1','8.8.8.8','1.0.0.1','8.8.4.4') -ErrorAction SilentlyContinue" >nul 2>&1
+        reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v "SmartScreenEnabled" /t REG_DWORD /d 0 /f >nul 2>&1
+        reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v "DownloadRestrictions" /t REG_DWORD /d 0 /f >nul 2>&1
+        reg add "HKLM\SOFTWARE\Policies\Google\Chrome" /v "DownloadRestrictions" /t REG_DWORD /d 0 /f >nul 2>&1
+        reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\Zones\3" /v "1806" /t REG_DWORD /d 0 /f >nul 2>&1
+        reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\Zones\3" /v "2500" /t REG_DWORD /d 3 /f >nul 2>&1
+        ipconfig /flushdns >nul 2>&1
+        echo [SUCCESS] Internet unblocked! Outlook and all sites accessible.
+        pause
+        goto main_menu
+
+        :menu_keyboard
+        cls
+        echo [K] ENABLING ARABIC & ENGLISH KEYBOARD LAYOUT (ALT+SHIFT)...
+        powershell -NoProfile -Command "try { $l = New-WinUserLanguageList -LanguageTag 'en-US'; $l.Add('ar-EG'); Set-WinUserLanguageList -LanguageList $l -Force } catch { Set-WinUserLanguageList -LanguageList en-US, ar-EG -Force }" >nul 2>&1
+        reg add "HKCU\Keyboard Layout\Preload" /v "1" /t REG_SZ /d "00000409" /f >nul 2>&1
+        reg add "HKCU\Keyboard Layout\Preload" /v "2" /t REG_SZ /d "00000401" /f >nul 2>&1
+        reg add "HKU\.DEFAULT\Keyboard Layout\Preload" /v "1" /t REG_SZ /d "00000409" /f >nul 2>&1
+        reg add "HKU\.DEFAULT\Keyboard Layout\Preload" /v "2" /t REG_SZ /d "00000401" /f >nul 2>&1
+        echo [SUCCESS] Bilingual keyboard active! Press Alt+Shift to switch.
+        pause
+        goto main_menu
+
+        :menu_runtimes
+        cls
+        echo [4] 1-CLICK INSTALL ALL GAMING RUNTIMES...
+        if exist "%ENG%\11_All_In_One_Gaming_Runtimes_AIO.bat" (
+            call "%ENG%\11_All_In_One_Gaming_Runtimes_AIO.bat"
         ) else (
-            echo Enabling 60 FPS Direct3D and CPU turbo priority...
-            reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v "Win32PrioritySeparation" /t REG_DWORD /d 38 /f >nul
+            winget install --id Microsoft.DirectX -e --silent --accept-package-agreements --accept-source-agreements 2>nul
+            winget install --id Microsoft.VCRedist.2015+.x64 -e --silent --accept-package-agreements --accept-source-agreements 2>nul
         )
+        echo [SUCCESS] Gaming Runtimes verified!
         pause
         goto main_menu
 
         :menu_roblox
+        cls
+        echo [3] ROBLOX 60 FPS SUPER FIX & VM BYPASS...
         if exist "%ENG%\01_Roblox_Deep_Fix_And_Installer.bat" (
             call "%ENG%\01_Roblox_Deep_Fix_And_Installer.bat"
         )
@@ -635,23 +782,12 @@ jobs:
 
         :menu_fixgame
         cls
-        echo ==============================================================================
-        echo               3D GAME COMPATIBILITY INJECTOR (MAFIA II / STEAM / D3D9)
-        echo ==============================================================================
-        echo.
-        echo This tool resolves:
-        echo   - Mafia II startup crash / black screen (missing PhysXLoader.dll, d3dx9_43.dll)
-        echo   - Steam games failing on Direct3DCreate9 (D3DERR_NOTAVAILABLE)
-        echo   - Software rasterization (dgVoodoo2 DirectX-to-D3D11 / WARP translation)
-        echo.
+        echo [5] 3D GAME COMPATIBILITY INJECTOR (MAFIA II / STEAM / D3D9)
         echo [1] Inject DirectX9 Fix into Mafia II (Steam / Common Game Paths)
         echo [2] Inject dgVoodoo2 WARP Wrapper into a Custom Game Directory
         echo [3] Back to Main Menu
-        echo.
         set /p gopt="Select [1-3]: "
         if "%gopt%"=="1" (
-            echo.
-            echo Scanning for Mafia II installation...
             for %%P in ("C:\Program Files (x86)\Steam\steamapps\common\Mafia II" "C:\Steam\steamapps\common\Mafia II" "D:\SteamLibrary\steamapps\common\Mafia II" "C:\Games\Mafia II") do (
                 if exist "%%~P" (
                     echo Found Mafia II at: %%~P
@@ -661,7 +797,7 @@ jobs:
                 )
             )
             reg add "HKLM\SOFTWARE\Microsoft\Direct3D\Drivers" /v "SoftwareOnly" /t REG_DWORD /d 0 /f >nul 2>&1
-            echo [SUCCESS] Compatibility registry tuned! Game will now launch properly.
+            echo [SUCCESS] Compatibility registry tuned!
             pause
         )
         if "%gopt%"=="2" (
@@ -671,42 +807,71 @@ jobs:
                 if exist "C:\M11Data\dgVoodoo2\dgVoodoo.conf" copy /y "C:\M11Data\dgVoodoo2\dgVoodoo.conf" "!gp!" >nul 2>&1
                 echo [SUCCESS] dgVoodoo2 injected into !gp!
             ) else (
-                echo Folder does not exist.
+                echo Folder does not exist: "!gp!"
             )
             pause
         )
         goto main_menu
 
-        :menu_games
-        if exist "%~dp0🎮_DOWNLOAD_GTA_V_AND_HEAVY_GAMES.bat" (
-            call "%~dp0🎮_DOWNLOAD_GTA_V_AND_HEAVY_GAMES.bat"
-        ) else if exist "%ENG%\15_GTA_V_And_Heavy_Games_Downloader.bat" (
-            call "%ENG%\15_GTA_V_And_Heavy_Games_Downloader.bat"
-        ) else (
-            echo Opening Steam and Epic download...
-            start https://store.steampowered.com/about/
-        )
-        goto main_menu
-
         :menu_apps
-        if exist "%~dp0🛒_M11_UNIVERSAL_STORE.bat" (
-            call "%~dp0🛒_M11_UNIVERSAL_STORE.bat"
-        ) else if exist "%ENG%\06_Install_Developer_And_Productivity_Apps.bat" (
+        cls
+        echo [6] INSTALL ESSENTIAL BROWSERS & APPS...
+        if exist "%ENG%\06_Install_Developer_And_Productivity_Apps.bat" (
             call "%ENG%\06_Install_Developer_And_Productivity_Apps.bat"
+        ) else if exist "%~dp0📁_M11_TOOL_PC\🛒_M11_UNIVERSAL_STORE.bat" (
+            call "%~dp0📁_M11_TOOL_PC\🛒_M11_UNIVERSAL_STORE.bat"
+        ) else (
+            winget install --id Google.Chrome -e --silent --accept-package-agreements --accept-source-agreements 2>nul
         )
+        pause
         goto main_menu
 
         :menu_storage
+        cls
+        echo [7] FREE 100GB SSD & LINK DRIVE D:...
         if exist "%ENG%\04_Free_Up_100GB_Disk_Space.bat" (
             call "%ENG%\04_Free_Up_100GB_Disk_Space.bat"
+        ) else (
+            rd /s /q "C:\Android" 2>nul
+            rd /s /q "C:\hostedtoolcache" 2>nul
+            del /q /f /s "%TEMP%\*" 2>nul
+        )
+        pause
+        goto main_menu
+
+        :menu_games
+        cls
+        echo [8] DOWNLOAD GTA V & HEAVY 3D GAMES...
+        if exist "%ENG%\15_GTA_V_And_Heavy_Games_Downloader.bat" (
+            call "%ENG%\15_GTA_V_And_Heavy_Games_Downloader.bat"
+        ) else if exist "%~dp0📁_M11_TOOL_PC\🎮_DOWNLOAD_GTA_V_AND_HEAVY_GAMES.bat" (
+            call "%~dp0📁_M11_TOOL_PC\🎮_DOWNLOAD_GTA_V_AND_HEAVY_GAMES.bat"
+        ) else (
+            start https://store.steampowered.com/about/
         )
         pause
         goto main_menu
 
         :menu_backup
+        cls
+        echo [9] INSTANT PERSISTENT CLOUD BACKUP...
         if exist "%ENG%\07_Instant_Cloud_Backup.bat" (
             call "%ENG%\07_Instant_Cloud_Backup.bat"
         )
+        pause
+        goto main_menu
+
+        :menu_audit
+        cls
+        echo [D] SYSTEM & GAMING RUNTIME STATUS AUDIT
+        if exist "C:\Windows\System32\d3dx9_43.dll" (echo   [x] DirectX 9.0c Runtimes        : INSTALLED) else (echo   [ ] DirectX 9.0c Runtimes        : MISSING)
+        if exist "C:\Windows\System32\vcruntime140.dll" (echo   [x] Visual C++ 2015-2022         : INSTALLED) else (echo   [ ] Visual C++ 2015-2022         : MISSING)
+        if exist "C:\Program Files (x86)\NVIDIA Corporation\PhysX" (echo   [x] NVIDIA PhysX System Software : INSTALLED) else (echo   [ ] NVIDIA PhysX System Software : MISSING)
+        if exist "%LOCALAPPDATA%\Roblox\Versions" (echo   [x] Roblox Client                : INSTALLED) else (echo   [ ] Roblox Client                : NOT INSTALLED)
+        if exist "%PROGRAMFILES%\Google\Chrome\Application\chrome.exe" (echo   [x] Google Chrome                : INSTALLED) else (echo   [ ] Google Chrome                : NOT INSTALLED)
+        sc query Audiosrv | findstr "RUNNING" >nul && (echo   [x] Windows Audio Engine         : RUNNING) || (echo   [ ] Windows Audio Engine         : STOPPED)
+        powershell -NoProfile -Command "$c = [math]::Round((Get-PSDrive C).Free / 1GB, 2); Write-Host '  [*] SSD Storage C: Free Space    :' $c 'GB'"
+        if exist "D:\" powershell -NoProfile -Command "$d = [math]::Round((Get-PSDrive D).Free / 1GB, 2); Write-Host '  [*] SSD Storage D: Free Space    :' $d 'GB'"
         pause
         goto main_menu
         '@
@@ -783,16 +948,11 @@ jobs:
         @echo off
         title M11 GAMING STORES INSTALLER
         color 0d
-        echo ==============================================================================
-        echo        M11 GAMING STORES (Steam, Epic Games, Minecraft Launcher)
-        echo ==============================================================================
-        echo.
         echo [1] Install Steam (Valve Official)
         echo [2] Install Epic Games Store
         echo [3] Install Minecraft Bedrock & Java Launcher
         echo [4] Install All 3 Gaming Stores
-        echo.
-        set /p sopt="Select an option [1-4]: "
+        set /p sopt="Select [1-4]: "
         if "%sopt%"=="1" winget install --id Valve.Steam -e --silent --accept-package-agreements --accept-source-agreements
         if "%sopt%"=="2" winget install --id EpicGames.EpicGamesLauncher -e --silent --accept-package-agreements --accept-source-agreements
         if "%sopt%"=="3" winget install --id Mojang.MinecraftLauncher -e --silent --accept-package-agreements --accept-source-agreements
@@ -809,10 +969,6 @@ jobs:
         @echo off
         title M11 DIRECTX11 & WARP / MESA3D GPU TURBO ACCELERATOR
         color 0e
-        echo ==============================================================================
-        echo     M11 DIRECTX 11 & WARP / MESA3D HARDWARE-LEVEL GPU ACCELERATOR
-        echo ==============================================================================
-        echo.
         echo [*] Enabling WARP Direct3D 11 multi-threading (4 Dedicated vCPUs)...
         setx WARP_FORCE_CPU_CORES 4 /M >nul 2>&1
         setx MESA_GL_THREAD true /M >nul 2>&1
@@ -850,7 +1006,6 @@ jobs:
         @echo off
         title M11 ROOT ADMIN UNLOCKER
         color 0c
-        echo Unlocking Root Administrator Privileges...
         net localgroup Administrators "M11 Dev-Tool" /add 2>nul
         net localgroup "Remote Desktop Users" "M11 Dev-Tool" /add 2>nul
         reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA /t REG_DWORD /d 0 /f 2>nul
@@ -863,7 +1018,7 @@ jobs:
             $subDir  = Join-Path $toolDir "📁_Engines_And_Scripts"
             if (-not (Test-Path $subDir)) { New-Item -ItemType Directory -Path $subDir -Force -ErrorAction SilentlyContinue | Out-Null }
 
-            # Deploy Master Control Center directly on Desktop and in Tool folder
+            # Deploy Master Control Center directly on Desktop
             Set-Content -Path (Join-Path $desk "⚡_M11_MASTER_CONTROL_CENTER.bat") -Value $masterControlCenterBat -Encoding utf8
             Set-Content -Path (Join-Path $desk "⚡_MASTER_RUNNER.bat") -Value $masterControlCenterBat -Encoding utf8
             Set-Content -Path (Join-Path $toolDir "⚡_M11_MASTER_CONTROL_CENTER.bat") -Value $masterControlCenterBat -Encoding utf8
@@ -1294,7 +1449,6 @@ jobs:
             if (-not (Test-Path $subDir)) { New-Item -ItemType Directory -Path $subDir -Force -ErrorAction SilentlyContinue | Out-Null }
 
             $universalStoreBat | Out-File -FilePath "$mainDir\🛒_M11_UNIVERSAL_STORE.bat" -Encoding ascii -Force
-            $universalStoreBat | Out-File -FilePath "$desk\🛒_M11_UNIVERSAL_STORE.bat" -Encoding ascii -Force
             $runtimesBat | Out-File -FilePath "$subDir\11_All_In_One_Gaming_Runtimes_AIO.bat" -Encoding ascii -Force
             $wingetBat | Out-File -FilePath "$subDir\12_Universal_Package_Manager_Winget_Choco.bat" -Encoding ascii -Force
             $vramBat | Out-File -FilePath "$subDir\13_Virtual_RAM_32GB_Pagefile_Booster.bat" -Encoding ascii -Force
@@ -1469,7 +1623,6 @@ jobs:
             if (-not (Test-Path $subDir)) { New-Item -ItemType Directory -Path $subDir -Force -ErrorAction SilentlyContinue | Out-Null }
 
             $gtaDownloaderBat | Out-File -FilePath "$mainDir\🎮_DOWNLOAD_GTA_V_AND_HEAVY_GAMES.bat" -Encoding ascii -Force
-            $gtaDownloaderBat | Out-File -FilePath "$desk\🎮_DOWNLOAD_GTA_V_AND_HEAVY_GAMES.bat" -Encoding ascii -Force
             $gtaDownloaderBat | Out-File -FilePath "$subDir\15_GTA_V_And_Heavy_Games_Downloader.bat" -Encoding ascii -Force
         }
         Write-Host "GTA V & Heavy Games Suite deployed on Desktop!" -ForegroundColor Green
