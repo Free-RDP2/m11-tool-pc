@@ -111,7 +111,7 @@ if exist "C:\M11Data\dgVoodoo2\dgVoodoo.conf" (
     copy /y "C:\M11Data\dgVoodoo2\*.*" "C:\Windows\System32\" >nul 2>&1
     echo  dgVoodoo2 copied to System32.
 ) else (
-    echo  (skip: dgVoodoo2 not staged in C:\M11Data\dgVoodoo2)
+    echo  [skip] dgVoodoo2 not staged in C:\M11Data\dgVoodoo2
 )
 echo [DONE] Legacy game compatibility enabled (DirectX 9 / WARP).
 pause
