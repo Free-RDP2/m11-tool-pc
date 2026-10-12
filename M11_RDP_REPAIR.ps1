@@ -230,4 +230,58 @@ foreach ($t in $toolDirs) {
         ForEach-Object { Log ('    removing broken self test: ' + $_.FullName); Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
 }
 Log '    legacy cleanup done'
+
+# ------------------------------------------------- 9. persistence daemon self-heal
+Log '[K] Persistence daemon check'
+$dmn = 'C:\M11Data\m11_persistent_daemon.ps1'
+if (Test-Path $dmn) {
+    $txt = [System.IO.File]::ReadAllText($dmn)
+    $patched = $false
+
+    if ($txt -match 'Get-FileHash') {
+        # Get-FileHash is not resolvable in the stripped runner shell -> .NET instead
+        $old = '$sha256 = (Get-FileHash -Algorithm SHA256 -Path $zipPath).Hash'
+        $new = "try { `$sha256 = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.IO.File]::ReadAllBytes(`$zipPath))).Replace('-','') } catch { `$sha256 = (Get-Item `$zipPath).Length.ToString() }"
+        $txt = $txt.Replace($old, $new)
+        $patched = $true
+        Log '    daemon hash function upgraded to .NET SHA256'
+    }
+
+    if ($txt -notmatch 'sync_now\.trigger') {
+        Log '    daemon is an old build (no on-demand trigger) - fetching the fixed daemon'
+        try {
+            curl.exe -fsSL 'https://raw.githubusercontent.com/Free-RDP2/m11-tool-pc/main/m11_persistent_daemon.ps1' -o 'C:\M11Data\_new_daemon.ps1'
+            if ((Test-Path 'C:\M11Data\_new_daemon.ps1') -and ((Get-Item 'C:\M11Data\_new_daemon.ps1').Length -gt 500)) {
+                $liveToken = ''
+                if ($txt -match '\$token = "([^"]+)"') { $liveToken = $matches[1] }
+                $liveRepo = 'Free-RDP2/m11-tool-pc'
+                if ($txt -match '\$repo = "([^"]+)"') { $liveRepo = $matches[1] }
+                $newText = [System.IO.File]::ReadAllText('C:\M11Data\_new_daemon.ps1')
+                $newText = $newText.Replace('REPLACE_PAT', $liveToken).Replace('REPLACE_GHT', $liveToken).Replace('REPLACE_REPO', $liveRepo)
+                [System.IO.File]::WriteAllText($dmn, $newText, (New-Object System.Text.UTF8Encoding($false)))
+                $patched = $true
+                Log '    fixed daemon installed (existing token preserved)'
+            }
+        } catch { Log ('    daemon download failed: ' + $_.Exception.Message) }
+    } elseif ($patched) {
+        [System.IO.File]::WriteAllText($dmn, $txt, (New-Object System.Text.UTF8Encoding($false)))
+    }
+
+    if ($patched) {
+        Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -like '*m11_persistent_daemon*' } |
+            ForEach-Object { Log ('    stopping daemon pid ' + $_.ProcessId); Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+        Start-Sleep -Seconds 2
+        Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File C:\M11Data\m11_persistent_daemon.ps1 -Daemon' -WindowStyle Hidden
+        Start-Sleep -Seconds 30
+        if (Test-Path 'C:\M11Data\m11_sync.log') {
+            Get-Content 'C:\M11Data\m11_sync.log' -Tail 5 | ForEach-Object { Log ('    ' + $_) }
+        }
+        Log '    daemon restarted with the fixed build'
+    } else {
+        Log '    daemon already up to date'
+    }
+} else {
+    Log '    no daemon installed yet (it is deployed automatically on the next session start)'
+}
 Log '===================== M11 v1.12 REPAIR END ====================='
