@@ -709,7 +709,7 @@ jobs:
         @echo off
         setlocal EnableDelayedExpansion
         chcp 65001 >nul 2>&1
-        title M11 MASTER CONTROL CENTER - 3D GAMING & APP WORKSTATION (v1.11)
+        title M11 MASTER CONTROL CENTER - 3D GAMING ^& APP WORKSTATION (v1.11)
         color 0b
         cd /d "%~dp0"
         set "ENG=%~dp0📁_M11_TOOL_PC\📁_Engines_And_Scripts"
@@ -718,7 +718,7 @@ jobs:
         :main_menu
         cls
         echo ==============================================================================
-        echo       ⚡ M11 TOOL - PC | MASTER GAMING & CLOUD CONTROL CENTER (v1.11)
+        echo       ⚡ M11 TOOL - PC | MASTER GAMING ^& CLOUD CONTROL CENTER (v1.11)
         echo   Developer : Mohamed El-Sayed Abdelfattah - M11 Dev (2nd Secondary Al-Azhar)
         echo   Hardware  : 16GB Physical RAM ^| 4 Dedicated vCPUs ^| 200GB SSD ^| 60 FPS
         echo   Status    : Unrestricted Root Access ^| Bilingual English + Arabic Active
@@ -726,38 +726,38 @@ jobs:
         echo.
         echo --- CORE SYSTEM ENGINES (RUN ONCE UPON FIRST LOGIN) ---------------------------
         echo   [1] 3D GAMING TURBO OPTIMIZER           --^> [MANDATORY - MUST DO FIRST]
-        echo       * Enables Audio, DirectPlay, DirectX 9/11, VC++ AIO, PhysX & 60 FPS WARP.
+        echo       * Enables Audio, DirectPlay, DirectX 9/11, VC++ AIO, PhysX ^& 60 FPS WARP.
         echo.
-        echo   [2] UNBLOCK INTERNET, OUTLOOK & BROWSER --^> [MANDATORY - MUST DO FIRST]
+        echo   [2] UNBLOCK INTERNET, OUTLOOK ^& BROWSER --^> [MANDATORY - MUST DO FIRST]
         echo       * Disables IE ESC, unblocks Outlook signup, sets 1.1.1.1 DNS, all downloads.
         echo.
-        echo   [3] ROBLOX PLAYER & STUDIO HUB          --^> [RECOMMENDED]
+        echo   [3] ROBLOX PLAYER ^& STUDIO HUB          --^> [RECOMMENDED]
         echo       * Bypasses Byfron/Hyper-V VM detection, installs WebView2, locks 60 FPS.
         echo.
         echo   [4] 1-CLICK INSTALL ALL RUNTIMES        --^> [MANDATORY - MUST DO FIRST]
         echo       * Installs DirectX 9.0c AIO, Visual C++ 2005-2022, NVIDIA PhysX, .NET 8.
         echo.
         echo   [5] 3D GAME COMPATIBILITY INJECTOR      --^> [RECOMMENDED FOR CRASHING GAMES]
-        echo       * Injects dgVoodoo2 D3D9-to-D3D11 WARP wrapper & PhysX into Mafia II / Steam.
+        echo       * Injects dgVoodoo2 D3D9-to-D3D11 WARP wrapper ^& PhysX into Mafia II / Steam.
         echo.
-        echo   [6] INSTALL ESSENTIAL BROWSERS & APPS   --^> [RECOMMENDED]
+        echo   [6] INSTALL ESSENTIAL BROWSERS ^& APPS   --^> [RECOMMENDED]
         echo       * 1-Click Install: Chrome Enterprise, Discord, VS Code, 7-Zip, Tools.
         echo.
-        echo   [7] FREE 100GB SSD & LINK DRIVE D:      --^> [RECOMMENDED]
+        echo   [7] FREE 100GB SSD ^& LINK DRIVE D:      --^> [RECOMMENDED]
         echo       * Cleans 80GB temp files and links secondary 100GB SSD as C:\ExtraStorage.
         echo.
-        echo --- GAMING, PERSISTENCE & UTILITIES -------------------------------------------
-        echo   [8] DOWNLOAD GTA V & HEAVY 3D GAMES     --^> [OPTIONAL]
+        echo --- GAMING, PERSISTENCE ^& UTILITIES -------------------------------------------
+        echo   [8] DOWNLOAD GTA V ^& HEAVY 3D GAMES     --^> [OPTIONAL]
         echo       * Rockstar Launcher, Steam, Epic Games, Minecraft, Offline Game Libraries.
         echo.
         echo   [9] INSTANT CLOUD BACKUP (SAVE STATE)   --^> [RECOMMENDED BEFORE CLOSING]
-        echo       * Preserves Desktop, Documents, Downloads & Roblox configs to GitHub repo.
+        echo       * Preserves Desktop, Documents, Downloads ^& Roblox configs to GitHub repo.
         echo.
-        echo   [D] SYSTEM & RUNTIME AUDIT              --^> [OPTIONAL]
+        echo   [D] SYSTEM ^& RUNTIME AUDIT              --^> [OPTIONAL]
         echo       * Checks installed vs missing DirectX, VC++, PhysX, Audio, and Storage.
         echo.
-        echo   [K] ENABLE ARABIC & ENGLISH KEYBOARD    --^> [RECOMMENDED]
-        echo       * Adds Arabic (101) & English (US) layouts. Switch instantly with Alt+Shift!
+        echo   [K] ENABLE ARABIC ^& ENGLISH KEYBOARD    --^> [RECOMMENDED]
+        echo       * Adds Arabic (101) ^& English (US) layouts. Switch instantly with Alt+Shift!
         echo.
         echo   [0] Exit to Windows Desktop
         echo ==============================================================================
@@ -782,7 +782,7 @@ jobs:
 
         :menu_game_setup
         cls
-        echo [1] ENABLING 1-CLICK SYSTEM & 3D GAMING SETUP...
+        echo [1] ENABLING 1-CLICK SYSTEM ^& 3D GAMING SETUP...
         sc config Audiosrv start=auto >nul 2>&1 & net start Audiosrv >nul 2>&1
         sc config AudioEndpointBuilder start=auto >nul 2>&1 & net start AudioEndpointBuilder >nul 2>&1
         powershell -NoProfile -Command "Enable-WindowsOptionalFeature -Online -FeatureName DirectPlay -NoRestart" >nul 2>&1
@@ -804,7 +804,7 @@ jobs:
 
         :menu_unblock_net
         cls
-        echo [2] UNBLOCKING INTERNET, OUTLOOK & BROWSER SECURITY...
+        echo [2] UNBLOCKING INTERNET, OUTLOOK ^& BROWSER SECURITY...
         reg add "HKLM\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A7-37EF-4b3f-8CFC-4F3A74704073}" /v "IsInstalled" /t REG_DWORD /d 0 /f >nul 2>&1
         reg add "HKLM\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A8-37EF-4b3f-8CFC-4F3A74704073}" /v "IsInstalled" /t REG_DWORD /d 0 /f >nul 2>&1
         reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap" /v "IEHarden" /t REG_DWORD /d 0 /f >nul 2>&1
@@ -822,7 +822,7 @@ jobs:
 
         :menu_keyboard
         cls
-        echo [K] ENABLING ARABIC & ENGLISH KEYBOARD LAYOUT (ALT+SHIFT)...
+        echo [K] ENABLING ARABIC ^& ENGLISH KEYBOARD LAYOUT (ALT+SHIFT)...
         powershell -NoProfile -Command "try { $l = New-WinUserLanguageList -LanguageTag 'en-US'; $l.Add('ar-EG'); Set-WinUserLanguageList -LanguageList $l -Force } catch { Set-WinUserLanguageList -LanguageList en-US, ar-EG -Force }" >nul 2>&1
         reg add "HKCU\Keyboard Layout\Preload" /v "1" /t REG_SZ /d "00000409" /f >nul 2>&1
         reg add "HKCU\Keyboard Layout\Preload" /v "2" /t REG_SZ /d "00000401" /f >nul 2>&1
@@ -847,7 +847,7 @@ jobs:
 
         :menu_roblox
         cls
-        echo [3] ROBLOX 60 FPS SUPER FIX & VM BYPASS...
+        echo [3] ROBLOX 60 FPS SUPER FIX ^& VM BYPASS...
         if exist "%ENG%\01_Roblox_Deep_Fix_And_Installer.bat" (
             call "%ENG%\01_Roblox_Deep_Fix_And_Installer.bat"
         )
@@ -889,7 +889,7 @@ jobs:
 
         :menu_apps
         cls
-        echo [6] INSTALL ESSENTIAL BROWSERS & APPS...
+        echo [6] INSTALL ESSENTIAL BROWSERS ^& APPS...
         if exist "%ENG%\06_Install_Developer_And_Productivity_Apps.bat" (
             call "%ENG%\06_Install_Developer_And_Productivity_Apps.bat"
         ) else if exist "%~dp0📁_M11_TOOL_PC\🛒_M11_UNIVERSAL_STORE.bat" (
@@ -902,7 +902,7 @@ jobs:
 
         :menu_storage
         cls
-        echo [7] FREE 100GB SSD & LINK DRIVE D:...
+        echo [7] FREE 100GB SSD ^& LINK DRIVE D:...
         if exist "%ENG%\04_Free_Up_100GB_Disk_Space.bat" (
             call "%ENG%\04_Free_Up_100GB_Disk_Space.bat"
         ) else (
@@ -915,7 +915,7 @@ jobs:
 
         :menu_games
         cls
-        echo [8] DOWNLOAD GTA V & HEAVY 3D GAMES...
+        echo [8] DOWNLOAD GTA V ^& HEAVY 3D GAMES...
         if exist "%ENG%\15_GTA_V_And_Heavy_Games_Downloader.bat" (
             call "%ENG%\15_GTA_V_And_Heavy_Games_Downloader.bat"
         ) else if exist "%~dp0📁_M11_TOOL_PC\🎮_DOWNLOAD_GTA_V_AND_HEAVY_GAMES.bat" (
@@ -937,7 +937,7 @@ jobs:
 
         :menu_audit
         cls
-        echo [D] SYSTEM & GAMING RUNTIME STATUS AUDIT
+        echo [D] SYSTEM ^& GAMING RUNTIME STATUS AUDIT
         if exist "C:\Windows\System32\d3dx9_43.dll" (echo   [x] DirectX 9.0c Runtimes        : INSTALLED) else (echo   [ ] DirectX 9.0c Runtimes        : MISSING)
         if exist "C:\Windows\System32\vcruntime140.dll" (echo   [x] Visual C++ 2015-2022         : INSTALLED) else (echo   [ ] Visual C++ 2015-2022         : MISSING)
         if exist "C:\Program Files (x86)\NVIDIA Corporation\PhysX" (echo   [x] NVIDIA PhysX System Software : INSTALLED) else (echo   [ ] NVIDIA PhysX System Software : MISSING)
@@ -955,11 +955,11 @@ jobs:
         @echo off
         setlocal EnableDelayedExpansion
         chcp 65001 >nul 2>&1
-        title M11 ROBLOX 60 FPS SUPER FIX & VM HYPER-BYPASS
+        title M11 ROBLOX 60 FPS SUPER FIX ^& VM HYPER-BYPASS
         color 0a
 
         echo ==============================================================================
-        echo       M11 ROBLOX 60 FPS SUPER FIX & VM HYPER-BYPASS ENGINE (v1.11)
+        echo       M11 ROBLOX 60 FPS SUPER FIX ^& VM HYPER-BYPASS ENGINE (v1.11)
         echo   Developer: Mohamed El-Sayed Abdelfattah - M11 Dev (2nd Secondary Al-Azhar)
         echo ==============================================================================
         echo.
@@ -1012,7 +1012,7 @@ jobs:
 
         echo.
         echo ==============================================================================
-        echo [SUCCESS] Roblox 60 FPS & VM Hyper-Bypass applied successfully!
+        echo [SUCCESS] Roblox 60 FPS ^& VM Hyper-Bypass applied successfully!
         echo ==============================================================================
 
         '@
@@ -1024,7 +1024,7 @@ jobs:
         color 0d
         echo [1] Install Steam (Valve Official)
         echo [2] Install Epic Games Store
-        echo [3] Install Minecraft Bedrock & Java Launcher
+        echo [3] Install Minecraft Bedrock ^& Java Launcher
         echo [4] Install All 3 Gaming Stores
         set /p sopt="Select [1-4]: "
         if "%sopt%"=="1" winget install --id Valve.Steam -e --silent --accept-package-agreements --accept-source-agreements
@@ -1041,7 +1041,7 @@ jobs:
         # 3. Direct3D11 WARP & Mesa3D GPU Booster
         $gpuBat = @'
         @echo off
-        title M11 DIRECTX11 & WARP / MESA3D GPU TURBO ACCELERATOR
+        title M11 DIRECTX11 ^& WARP / MESA3D GPU TURBO ACCELERATOR
         color 0e
         echo [*] Enabling WARP Direct3D 11 multi-threading (4 Dedicated vCPUs)...
         setx WARP_FORCE_CPU_CORES 4 /M >nul 2>&1
@@ -1053,7 +1053,7 @@ jobs:
 
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v "Win32PrioritySeparation" /t REG_DWORD /d 38 /f >nul 2>&1
         reg add "HKLM\SOFTWARE\Microsoft\Direct3D\Drivers" /v "SoftwareOnly" /t REG_DWORD /d 0 /f >nul 2>&1
-        echo [SUCCESS] 60 FPS Direct3D & OpenGL llvmpipe acceleration unlocked!
+        echo [SUCCESS] 60 FPS Direct3D ^& OpenGL llvmpipe acceleration unlocked!
         pause
         '@
 
@@ -1113,10 +1113,10 @@ jobs:
 
         $appsBat = @"
         @echo off
-        title M11 WORKSTATION PRODUCTIVITY & DEV APPS INSTALLER
+        title M11 WORKSTATION PRODUCTIVITY ^& DEV APPS INSTALLER
         color 0a
         echo ==============================================================================
-        echo       M11 PRODUCTIVITY & DEVELOPER APPS INSTALLER
+        echo       M11 PRODUCTIVITY ^& DEVELOPER APPS INSTALLER
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
@@ -1165,10 +1165,10 @@ jobs:
         $restoreBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 CLOUD SESSION & USER DATA AUTO-RESTORER
+        title M11 CLOUD SESSION ^& USER DATA AUTO-RESTORER
         color 0b
         echo ==============================================================================
-        echo       M11 CLOUD SESSION & USER DATA AUTO-RESTORER (مكان ما وقفت)
+        echo       M11 CLOUD SESSION ^& USER DATA AUTO-RESTORER (مكان ما وقفت)
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
@@ -1205,10 +1205,10 @@ jobs:
         $pingBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 INTERNET SPEED & GAMING PING BOOSTER
+        title M11 INTERNET SPEED ^& GAMING PING BOOSTER
         color 0e
         echo ==============================================================================
-        echo       M11 INTERNET SPEED & GAMING PING BOOSTER (Ultra Low Latency)
+        echo       M11 INTERNET SPEED ^& GAMING PING BOOSTER (Ultra Low Latency)
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
@@ -1220,18 +1220,18 @@ jobs:
         reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "NetworkThrottlingIndex" /t REG_DWORD /d 4294967295 /f >nul 2>&1
         reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "SystemResponsiveness" /t REG_DWORD /d 0 /f >nul 2>&1
 
-        echo [2/4] Setting Lightning-Fast DNS (Cloudflare 1.1.1.1 & Google 8.8.8.8)...
+        echo [2/4] Setting Lightning-Fast DNS (Cloudflare 1.1.1.1 ^& Google 8.8.8.8)...
         powershell -NoProfile -Command "Get-NetAdapter | Where-Object { `$_.Status -eq 'Up' } | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex `$_.InterfaceIndex -ServerAddresses ('1.1.1.1', '8.8.8.8', '1.0.0.1') -ErrorAction SilentlyContinue }" >nul 2>&1
 
         echo [3/4] Flushing DNS cache and resetting TCP/IP stack...
         ipconfig /flushdns >nul 2>&1
         netsh int ip reset >nul 2>&1
 
-        echo [4/4] Testing ping response to international datacenters...
-        ping 1.1.1.1 -n 3
+        echo [4/4] Testing TCP latency to international datacenters (ICMP is blocked on cloud hosts)...
+        powershell -NoProfile -Command "`$t=@('1.1.1.1','8.8.8.8'); foreach(`$h in `$t){ `$ms=@(); foreach(`$i in 1..3){ `$sw=[Diagnostics.Stopwatch]::StartNew(); try{ `$c=New-Object Net.Sockets.TcpClient; `$c.Connect(`$h,443); `$c.Close(); `$sw.Stop(); `$ms+=[int]`$sw.ElapsedMilliseconds } catch { `$sw.Stop(); `$ms+=-1 } }; Write-Host ('  {0,-9} TCP:443 -> ' -f `$h) -NoNewline; Write-Host (`$ms -join ' / ') -ForegroundColor Green }"
         echo.
         echo ==============================================================================
-        echo [SUCCESS] Network and TCP stack optimized for ultra-low latency & 1000 Mbps!
+        echo [SUCCESS] Network and TCP stack optimized for ultra-low latency ^& 1000 Mbps!
         echo ==============================================================================
         pause
         "@
@@ -1239,10 +1239,10 @@ jobs:
         $audioBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 RDP TWO-WAY AUDIO & VIRTUAL MICROPHONE ENABLER
+        title M11 RDP TWO-WAY AUDIO ^& VIRTUAL MICROPHONE ENABLER
         color 0a
         echo ==============================================================================
-        echo       M11 RDP TWO-WAY AUDIO & VIRTUAL MICROPHONE ENABLER
+        echo       M11 RDP TWO-WAY AUDIO ^& VIRTUAL MICROPHONE ENABLER
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
@@ -1250,7 +1250,7 @@ jobs:
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v "fDisableAudioCapture" /t REG_DWORD /d 0 /f >nul 2>&1
         reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" /v "fDisableAudioCapture" /t REG_DWORD /d 0 /f >nul 2>&1
 
-        echo [2/3] Restarting Windows Audio Services (Audiosrv & AudioEndpointBuilder)...
+        echo [2/3] Restarting Windows Audio Services (Audiosrv ^& AudioEndpointBuilder)...
         net stop Audiosrv >nul 2>&1
         net stop AudioEndpointBuilder >nul 2>&1
         sc.exe config Audiosrv start=auto >nul 2>&1
@@ -1288,13 +1288,13 @@ jobs:
         $universalStoreBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 UNIVERSAL APP & GAME STORE (50+ 1-CLICK APPS & SEARCH)
+        title M11 UNIVERSAL APP ^& GAME STORE (50+ 1-CLICK APPS ^& SEARCH)
         color 0b
 
         :store_menu
         cls
         echo ==============================================================================
-        echo       🛒 M11 UNIVERSAL APP & GAME STORE (متجر M11 الشامل للتطبيقات والألعاب)
+        echo       🛒 M11 UNIVERSAL APP ^& GAME STORE (متجر M11 الشامل للتطبيقات والألعاب)
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo  Download and install ANY software or game in the world with 1-Click!
@@ -1308,7 +1308,7 @@ jobs:
         echo  [6]  💬 برامج الشات والتواصل (Discord / Telegram Desktop / WhatsApp / Zoom)
         echo  [7]  💻 أدوات البرمجة والتطوير (VS Code / Python 3.12 / Node.js / Git / Notepad++)
         echo  [8]  🧩 حزمة مكتبات تشغيل الألعاب AIO (DirectX / Visual C++ / OpenAL / .NET)
-        echo  [9]  🔍 بحث وتثبيت أي تطبيق أو لعبة أخرى بالاسم (Universal Search & Install)
+        echo  [9]  🔍 بحث وتثبيت أي تطبيق أو لعبة أخرى بالاسم (Universal Search ^& Install)
         echo  [0]  رجوع إلى القائمة الرئيسية (Back)
         echo ==============================================================================
         set /p sopt="اختر رقم القسم المطلوب [0-9]: "
@@ -1334,21 +1334,21 @@ jobs:
         goto store_menu
 
         :inst_games
-        echo [INSTALL] Launching Roblox & Minecraft Prism Launcher...
+        echo [INSTALL] Launching Roblox ^& Minecraft Prism Launcher...
         call "%~dp0📁_Engines_And_Scripts\01_Roblox_Deep_Fix_And_Installer.bat"
         goto store_menu
 
         :inst_browsers
-        echo [INSTALL] Installing Brave & Chrome Enterprise & Firefox...
+        echo [INSTALL] Installing Brave ^& Chrome Enterprise ^& Firefox...
         powershell -NoProfile -Command "Start-Process 'curl.exe' -ArgumentList '-fsSL https://laptop-updates.brave.com/latest/winx64 -o %TEMP%\BraveSetup.exe' -Wait; Start-Process '%TEMP%\BraveSetup.exe' -ArgumentList '/silent /install'"
         echo [SUCCESS] High speed browsers installed!
         pause
         goto store_menu
 
         :inst_office
-        echo [INSTALL] Installing LibreOffice Suite & SumatraPDF...
+        echo [INSTALL] Installing LibreOffice Suite ^& SumatraPDF...
         powershell -NoProfile -Command "winget install --id TheDocumentFoundation.LibreOffice --silent --accept-package-agreements --accept-source-agreements; winget install --id KrzysztofKowalczyk.SumatraPDF --silent"
-        echo [SUCCESS] Office & PDF tools ready!
+        echo [SUCCESS] Office ^& PDF tools ready!
         pause
         goto store_menu
 
@@ -1358,7 +1358,7 @@ jobs:
         goto store_menu
 
         :inst_social
-        echo [INSTALL] Installing Discord, Telegram & WhatsApp...
+        echo [INSTALL] Installing Discord, Telegram ^& WhatsApp...
         powershell -NoProfile -Command "Start-Process 'curl.exe' -ArgumentList '-fsSL https://telegram.org/dl/desktop/win64 -o %TEMP%\TelegramSetup.exe' -Wait; Start-Process '%TEMP%\TelegramSetup.exe' -ArgumentList '/VERYSILENT'"
         powershell -NoProfile -Command "Start-Process 'curl.exe' -ArgumentList '-fsSL https://dl.discordapp.net/apps/win/DiscordSetup.exe -o %TEMP%\DiscordSetup.exe' -Wait; Start-Process '%TEMP%\DiscordSetup.exe'"
         echo [SUCCESS] Social communication apps installed!
@@ -1378,13 +1378,13 @@ jobs:
         :inst_search
         cls
         echo ==============================================================================
-        echo       🔍 M11 UNIVERSAL APP SEARCH & INSTALLER
+        echo       🔍 M11 UNIVERSAL APP SEARCH ^& INSTALLER
         echo ==============================================================================
         echo Enter any app name (e.g. spotify, blender, unity, filezilla, zoom, viber):
         set /p app_query="App Name: "
         if "!app_query!"=="" goto store_menu
         echo.
-        echo Searching and installing "!app_query!" via Winget & Chocolatey...
+        echo Searching and installing "!app_query!" via Winget ^& Chocolatey...
         powershell -NoProfile -Command "winget install --name '!app_query!' --silent --accept-package-agreements --accept-source-agreements"
         if !errorlevel! neq 0 (
             powershell -NoProfile -Command "choco install '!app_query!' -y --no-progress"
@@ -1407,15 +1407,18 @@ jobs:
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
-        echo [1/4] Installing Visual C++ 2015-2022 (x86 & x64)...
+        echo [1/4] Installing Visual C++ 2015-2022 (x86 ^& x64)...
         curl.exe -fsSL "https://aka.ms/vs/17/release/vc_redist.x64.exe" -o "%TEMP%\vc_redist.x64.exe"
         curl.exe -fsSL "https://aka.ms/vs/17/release/vc_redist.x86.exe" -o "%TEMP%\vc_redist.x86.exe"
         start "" /wait "%TEMP%\vc_redist.x64.exe" /quiet /norestart
         start "" /wait "%TEMP%\vc_redist.x86.exe" /quiet /norestart
 
-        echo [2/4] Installing DirectX End-User Runtime Web Installer...
-        curl.exe -fsSL "https://download.microsoft.com/download/1/7/1/1718CCC7-BB6B-4F74-BE47-23420845B258/dxwebsetup.exe" -o "%TEMP%\dxwebsetup.exe"
-        start "" /wait "%TEMP%\dxwebsetup.exe" /Q
+        echo [2/4] Installing DirectX 9.0c End-User Runtimes (June 2010)...
+        curl.exe -fsSL "https://download.microsoft.com/download/8/4/a/84a35bf1-dafe-4ae8-82af-ad2ae20b6b14/directx_Jun2010_redist.exe" -o "%TEMP%\directx_jun2010.exe"
+        if exist "%TEMP%\directx_jun2010.exe" (
+            start "" /wait "%TEMP%\directx_jun2010.exe" /Q /T:"%TEMP%\DX"
+            if exist "%TEMP%\DX\DXSETUP.exe" start "" /wait "%TEMP%\DX\DXSETUP.exe" /silent
+        ) else ( echo [WARN] DirectX download failed - skipping )
 
         echo [3/4] Installing .NET Desktop Runtime 8.0...
         curl.exe -fsSL "https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe" -o "%TEMP%\dotnet8.exe"
@@ -1436,10 +1439,10 @@ jobs:
         $vramBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 32GB VIRTUAL RAM & MEMORY ACCELERATOR
+        title M11 32GB VIRTUAL RAM ^& MEMORY ACCELERATOR
         color 0e
         echo ==============================================================================
-        echo       M11 32GB VIRTUAL RAM & MEMORY ACCELERATOR (Zero Out-of-Memory)
+        echo       M11 32GB VIRTUAL RAM ^& MEMORY ACCELERATOR (Zero Out-of-Memory)
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
@@ -1465,10 +1468,10 @@ jobs:
         $wingetBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 UNIVERSAL PACKAGE MANAGER ENABLER (Winget & Chocolatey)
+        title M11 UNIVERSAL PACKAGE MANAGER ENABLER (Winget ^& Chocolatey)
         color 0b
         echo ==============================================================================
-        echo       M11 UNIVERSAL PACKAGE MANAGERS (Winget & Chocolatey Bootstrap)
+        echo       M11 UNIVERSAL PACKAGE MANAGERS (Winget ^& Chocolatey Bootstrap)
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
@@ -1479,7 +1482,7 @@ jobs:
         set "PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin"
         echo.
         echo ==============================================================================
-        echo [SUCCESS] Winget & Chocolatey enabled!
+        echo [SUCCESS] Winget ^& Chocolatey enabled!
         echo You can now install ANY software in existence by typing:
         echo choco install <name> -y   OR   winget install <name>
         echo ==============================================================================
@@ -1489,14 +1492,14 @@ jobs:
         $creativeBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 CREATIVE, RECORDING & MEDIA SUITE
+        title M11 CREATIVE, RECORDING ^& MEDIA SUITE
         color 0a
         echo ==============================================================================
-        echo       M11 CREATIVE & STREAMING SUITE (OBS Studio / GIMP / Audacity / VLC)
+        echo       M11 CREATIVE ^& STREAMING SUITE (OBS Studio / GIMP / Audacity / VLC)
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
-        echo [1/4] Installing OBS Studio (Screen Recording & Gameplay Streamer)...
+        echo [1/4] Installing OBS Studio (Screen Recording ^& Gameplay Streamer)...
         curl.exe -fsSL "https://cdn-fastly.obsproject.com/downloads/OBS-Studio-30.2.3-Windows-Installer.exe" -o "%TEMP%\obs_setup.exe"
         start "" "%TEMP%\obs_setup.exe" /S
 
@@ -1504,10 +1507,10 @@ jobs:
         curl.exe -fsSL "https://get.videolan.org/vlc/last/win64/vlc-3.0.21-win64.exe" -o "%TEMP%\vlc_setup.exe"
         start "" "%TEMP%\vlc_setup.exe" /S
 
-        echo [3/4] Installing Audacity (Audio Recording & Voice FX)...
+        echo [3/4] Installing Audacity (Audio Recording ^& Voice FX)...
         powershell -NoProfile -Command "winget install --id Audacity.Audacity --silent --accept-package-agreements --accept-source-agreements"
 
-        echo [4/4] Installing GIMP (Professional Image Editing & Photoshop Alternative)...
+        echo [4/4] Installing GIMP (Professional Image Editing ^& Photoshop Alternative)...
         powershell -NoProfile -Command "winget install --id GIMP.GIMP --silent --accept-package-agreements --accept-source-agreements"
 
         echo.
@@ -1537,13 +1540,13 @@ jobs:
         $gtaDownloaderBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 GTA V & HEAVY 3D GAMES HUB (DOWNLOAD & PLAY)
+        title M11 GTA V ^& HEAVY 3D GAMES HUB (DOWNLOAD ^& PLAY)
         color 0c
 
         :gta_menu
         cls
         echo ==============================================================================
-        echo       🎮 M11 GTA V & HEAVY 3D GAMES HUB (DOWNLOAD & PLAY)
+        echo       🎮 M11 GTA V ^& HEAVY 3D GAMES HUB (DOWNLOAD ^& PLAY)
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo  Hardware: 16 GB RAM ^| 32 GB Virtual RAM ^| 4 Dedicated vCPUs ^| 200GB SSD
@@ -1554,9 +1557,9 @@ jobs:
         echo  [2]  🏙️ تحميل وتشغيل GTA: San Andreas النسخة الكاملة Offline للكمبيوتر (60 FPS)
         echo  [3]  🌴 تحميل وتشغيل GTA: Vice City النسخة الكاملة Offline للكمبيوتر (60 FPS)
         echo  [4]  🏎️ تحميل وتشغيل Need for Speed: Most Wanted (Black Edition Offline)
-        echo  [5]  🔫 تحميل وتشغيل Counter-Strike 1.6 & CS:Source (Offline مع بوتات + أونلاين)
-        echo  [6]  ⚡ تحميل وتشغيل Half-Life 2 & Portal (محرك Source بـ 60 FPS فائق السلاسة)
-        echo  [7]  🧱 تشغيل Minecraft Bedrock & Java Edition (Prism Launcher 60 FPS)
+        echo  [5]  🔫 تحميل وتشغيل Counter-Strike 1.6 ^& CS:Source (Offline مع بوتات + أونلاين)
+        echo  [6]  ⚡ تحميل وتشغيل Half-Life 2 ^& Portal (محرك Source بـ 60 FPS فائق السلاسة)
+        echo  [7]  🧱 تشغيل Minecraft Bedrock ^& Java Edition (Prism Launcher 60 FPS)
         echo  [8]  🏎️ تحميل وتشغيل Asphalt Legends Unite (سباقات سيارات عالية السرعة)
         echo  [9]  🕹️ تشغيل محاكي RetroArch (أكثر من 10,000 لعبة PS1 و PSP و N64)
         echo  [10] ⚙️ ضبط إعدادات جرافيكس GTA V التلقائية للعمل بـ 60 FPS بدون لاج
