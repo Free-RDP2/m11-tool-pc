@@ -198,4 +198,36 @@ foreach ($t in $toolDirs) {
         Log ('    ' + $_.FullName.Replace($t, '<toolkit>') + '  [' + $_.Length + ' bytes]')
     }
 }
+
+# ------------------------------------------------- 8. legacy cleanup
+Log '[J] Legacy cleanup (files left by the earlier failed attempts)'
+$legacyFiles = @(
+    'C:\\M11Data\\s02A.ps1','C:\\M11Data\\s02E.ps1','C:\\M11Data\\s02F.ps1','C:\\M11Data\\s02G.ps1',
+    'C:\\M11Data\\s02H.ps1','C:\\M11Data\\s02I.ps1','C:\\M11Data\\s05B.ps1',
+    'C:\\M11Data\\bom_s02E.ps1','C:\\M11Data\\bom_s02F.ps1','C:\\M11Data\\bom_s02G.ps1',
+    'C:\\M11Data\\bom_s02H.ps1','C:\\M11Data\\bom_s02I.ps1','C:\\M11Data\\bom_m11_repair_master.ps1',
+    'C:\\M11Data\\bom_m11_repair_run.ps1','C:\\M11Data\\m11_repair_master.ps1','C:\\M11Data\\m11_repair_run.ps1',
+    'C:\\M11Data\\m11_repair_log.txt','C:\\M11Data\\m11_repair_log2.txt','C:\\M11Data\\remote_out.txt',
+    'C:\\M11Data\\m11_task_inner.bat','C:\\M11Data\\m11_task_outer.bat','C:\\M11Data\\_m11_task_run.bat',
+    'C:\\M11Data\\_out.txt','C:\\M11Data\\_done.txt','C:\\M11Data\\_exitcode.txt','C:\\M11Data\\watchdog_state.zip'
+)
+$gone = 0
+foreach ($lf in $legacyFiles) {
+    if (Test-Path $lf) { Remove-Item -LiteralPath $lf -Force -ErrorAction SilentlyContinue; $gone++ }
+}
+Log ("    removed " + $gone + " legacy debug files")
+
+# duplicate control-center variant produced during the first fix pass
+foreach ($d in $desks) {
+    Get-ChildItem -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like ([char]0x2699 + '_*') } |
+        ForEach-Object { Log ('    removing duplicate variant: ' + $_.Name); Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+}
+# the broken 2.4 KB self test written by v1.11
+foreach ($t in $toolDirs) {
+    Get-ChildItem -LiteralPath $t -Recurse -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq 'M11_SELF_TEST.bat' } |
+        ForEach-Object { Log ('    removing broken self test: ' + $_.FullName); Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+}
+Log '    legacy cleanup done'
 Log '===================== M11 v1.12 REPAIR END ====================='
