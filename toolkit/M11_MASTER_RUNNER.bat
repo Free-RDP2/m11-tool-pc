@@ -25,7 +25,7 @@ for /d %%D in ("%SELF%..\*_Engines_And_Scripts") do set "ENG=%%~fD"
 
 if not defined ENG (
     echo [!] Engines folder not found next to this runner.
-    echo     Expected: M11_TOOL_PC\_Engines_And_Scripts
+    echo     Expected: M11_TOOL_PC\ (<any>_Engines_And_Scripts)
     echo.
     pause
     exit /b 1
@@ -59,7 +59,7 @@ set "opt="
 set /p opt="Choice: "
 if not defined opt goto menu
 
-if /i "%opt%"=="1" set "F=01_Roblox_Deep_Fix_And_Installer.bat" & goto runfirst
+if /i "%opt%"=="1" set "F=00_System_And_3D_Gaming_Turbo_Optimizer.bat" & goto runfirst
 if /i "%opt%"=="2" set "F=09_Internet_Speed_And_Ping_Booster.bat" & goto run
 if /i "%opt%"=="3" set "F=01_Roblox_Deep_Fix_And_Installer.bat" & goto run
 if /i "%opt%"=="4" set "F=11_All_In_One_Gaming_Runtimes_AIO.bat" & goto run
@@ -104,8 +104,8 @@ pause >nul
 goto menu
 
 :selftest
-set "TARGET=%ENG%\_M11_SELF_TEST.bat"
-if not exist "%TARGET%" set "TARGET=%SELF%_M11_SELF_TEST.bat"
+set "TARGET=%SELF%_M11_SELF_TEST.bat"
+if not exist "%TARGET%" set "TARGET=%ENG%\_M11_SELF_TEST.bat"
 if not exist "%TARGET%" (
     echo [!] Self test not found.
     pause
