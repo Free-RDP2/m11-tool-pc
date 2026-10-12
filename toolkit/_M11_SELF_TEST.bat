@@ -92,7 +92,7 @@ echo --- MOJIBAKE / INTEGRITY SCAN ---
 if exist "%HERE%_M11_MOJI_CHECK.ps1" (
   powershell -NoProfile -ExecutionPolicy Bypass -File "%HERE%_M11_MOJI_CHECK.ps1" 2>&1 | findstr /v "^$"
 ) else (
-  echo   (checker not found - skipping)
+  echo   [skip] checker not found
 )
 
 echo.
