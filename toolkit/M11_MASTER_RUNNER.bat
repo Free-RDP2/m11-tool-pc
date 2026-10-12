@@ -57,7 +57,7 @@ echo   [0] Exit
 echo ==============================================================================
 set "opt="
 rem --- optional command line argument: M11 script 0|1|2... runs that entry directly ---
-if not "%~1"=="" set "opt=%~1"
+if not "%~1"=="" set "opt=%~1" & set "M11_NONINTERACTIVE=1"
 if defined opt goto dispatch
 set /p opt="Choice: "
 if not defined opt (
@@ -118,6 +118,10 @@ if not exist "%TARGET%" set "TARGET=%ENG%\_M11_SELF_TEST.bat"
 if not exist "%TARGET%" (
     echo [!] Self test not found.
     pause
+    goto menu
+)
+if defined M11_NONINTERACTIVE (
+    call "%TARGET%" nopause
     goto menu
 )
 call "%TARGET%"
