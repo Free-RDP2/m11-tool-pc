@@ -959,66 +959,154 @@ jobs:
         @echo off
         setlocal EnableDelayedExpansion
         chcp 65001 >nul 2>&1
-        title M11 ROBLOX 60 FPS SUPER FIX ^& VM HYPER-BYPASS
+        title M11 ROBLOX PLAYER + STUDIO DEPLOYER (v1.14)
         color 0a
-
+        
         echo ==============================================================================
-        echo       M11 ROBLOX 60 FPS SUPER FIX ^& VM HYPER-BYPASS ENGINE (v1.11)
-        echo   Developer: Mohamed El-Sayed Abdelfattah - M11 Dev (2nd Secondary Al-Azhar)
+        echo       M11 ROBLOX PLAYER ^& STUDIO DEPLOYER (Silent, Verified) (v1.14)
+        echo   Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
-        echo [*] Terminating lingering Roblox processes...
-        taskkill /f /im RobloxPlayerBeta.exe 2>nul
-        taskkill /f /im RobloxStudioBeta.exe 2>nul
-        taskkill /f /im RobloxPlayerLauncher.exe 2>nul
-
-        echo [*] Resetting corrupt Roblox registry and AppData state...
-        reg delete "HKCU\Software\ROBLOX Corporation" /f 2>nul
-        reg delete "HKLM\SOFTWARE\ROBLOX Corporation" /f 2>nul
-        rmdir /s /q "%LOCALAPPDATA%\Roblox\Downloads" 2>nul
-        rmdir /s /q "%TEMP%\Roblox" 2>nul
-
-        echo [*] Verifying Microsoft Edge WebView2 runtime...
-        if not exist "%PROGRAMFILES(X86)%\Microsoft\EdgeWebView\Application" (
-            echo Installing Edge WebView2 runtime for Roblox login and UI rendering...
-            curl -L -s -o "%TEMP%\MicrosoftEdgeWebview2Setup.exe" "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
-            start /wait "" "%TEMP%\MicrosoftEdgeWebview2Setup.exe" /silent /install
+        
+        echo [1/8] Stopping lingering Roblox processes...
+        taskkill /f /im RobloxPlayerBeta.exe >nul 2>&1
+        taskkill /f /im RobloxStudioBeta.exe >nul 2>&1
+        taskkill /f /im RobloxPlayerLauncher.exe >nul 2>&1
+        taskkill /f /im RobloxCrashHandler.exe >nul 2>&1
+        
+        echo [2/8] Cleaning corrupt Roblox state (keeps installed versions)...
+        reg delete "HKCU\Software\ROBLOX Corporation\Environments" /f >nul 2>&1
+        rmdir /s /q "%LOCALAPPDATA%\Roblox\Downloads" >nul 2>&1
+        rmdir /s /q "%TEMP%\Roblox" >nul 2>&1
+        del /f /q "%LOCALAPPDATA%\Roblox\logs\*.log" >nul 2>&1
+        
+        echo [3/8] Ensuring Microsoft Edge WebView2 (needed by Roblox UI)...
+        set "WV2=%PROGRAMFILES(X86)%\Microsoft\EdgeWebView\Application"
+        if not exist "%WV2%" if not exist "%PROGRAMFILES%\Microsoft\EdgeWebView\Application" (
+            echo       installing WebView2 runtime...
+            curl.exe -fsSL --max-time 300 -o "%TEMP%\WebView2Setup.exe" "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+            if exist "%TEMP%\WebView2Setup.exe" start "" /wait "%TEMP%\WebView2Setup.exe" /silent /install
+        ) else ( echo       WebView2 already present.)
+        
+        echo [4/8] Ensuring Visual C++ 2015-2022 runtimes (x86 + x64, required by the client)...
+        curl.exe -fsSL --max-time 300 -o "%TEMP%\vc_x64.exe" "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+        curl.exe -fsSL --max-time 300 -o "%TEMP%\vc_x86.exe" "https://aka.ms/vs/17/release/vc_redist.x86.exe"
+        if exist "%TEMP%\vc_x64.exe" start "" /wait "%TEMP%\vc_x64.exe" /quiet /norestart
+        if exist "%TEMP%\vc_x86.exe" start "" /wait "%TEMP%\vc_x86.exe" /quiet /norestart
+        
+        echo [5/8] Installing Roblox Player silently (winget -^> direct installer -^> versioned CDN)...
+        call :ROBLOX_INSTALLED
+        if "!INSTALLED!"=="1" (
+            echo       Roblox Player already installed - refreshing it silently.
         )
-
-        echo [*] Configuring 60 FPS Direct3D 11 FastFlags...
-        set "SETTINGS_JSON={"DFIntTaskSchedulerTargetFps":60,"FFlagTaskSchedulerLimitTargetFpsTo240":"False","FFlagDebugGraphicsPreferD3D11":"True","FFlagDebugGraphicsDisableDirect3D11":"False","DFFlagDisableDPIScale":"True","FFlagGraphicsDirect3D11ForceD3D11":"True","FFlagDebugGraphicsPreferD3D11FL10":"True","DFIntCanHideGuiGroupId":32380007}"
-
-        mkdir "%LOCALAPPDATA%\Roblox\ClientSettings" 2>nul
+        where winget >nul 2>&1
+        if !errorlevel! EQU 0 (
+            echo       trying: winget install Roblox.Roblox --silent
+            winget install -e --id Roblox.Roblox --silent --accept-package-agreements --accept-source-agreements --disable-interactivity >nul 2>&1
+        ) else ( echo       winget not on PATH - using the official installer directly )
+        call :ROBLOX_INSTALLED
+        if "!INSTALLED!"=="0" (
+            echo       trying: RobloxPlayerInstaller.exe -install -silent
+            curl.exe -fsSL --max-time 300 -o "%TEMP%\RobloxPlayerInstaller.exe" "https://setup.rbxcdn.com/RobloxPlayerInstaller.exe"
+            if exist "%TEMP%\RobloxPlayerInstaller.exe" start "" /wait "%TEMP%\RobloxPlayerInstaller.exe" -install -silent
+        )
+        call :ROBLOX_INSTALLED
+        if "!INSTALLED!"=="0" (
+            echo       trying: versioned CDN installer
+            for /f "delims=" %%V in ('powershell -NoProfile -Command "(Invoke-WebRequest -UseBasicParsing -Uri https://clientsettingscdn.roblox.com/v2/client-version/WindowsPlayer).Content | ConvertFrom-Json | Select-Object -ExpandProperty clientVersionUpload" 2^>nul') do set "RBXV=%%V"
+            if defined RBXV (
+                curl.exe -fsSL --max-time 300 -o "%TEMP%\RobloxVersioned.exe" "https://setup.rbxcdn.com/!RBXV!-RobloxPlayerInstaller.exe"
+                if exist "%TEMP%\RobloxVersioned.exe" start "" /wait "%TEMP%\RobloxVersioned.exe" -install -silent
+            )
+        )
+        
+        echo       waiting for the client to finish installing (max 4 minutes)...
+        set /a WAIT=0
+        :WAITLOOP
+        call :ROBLOX_INSTALLED
+        if "!INSTALLED!"=="1" goto INSTALL_OK
+        set /a WAIT+=1
+        if !WAIT! GEQ 48 goto INSTALL_TIMEOUT
+        timeout /t 5 /nobreak >nul
+        goto WAITLOOP
+        
+        :INSTALL_TIMEOUT
+        echo.
+        echo [WARN] Roblox client not detected after 4 minutes.
+        echo        Run this engine later from the desktop icon, or install once from roblox.com - Play.
+        echo        The optimizations below will still be applied.
+        goto OPTIMIZE
+        
+        :INSTALL_OK
+        echo [OK] Roblox Player detected.
+        
+        :OPTIMIZE
+        echo [6/8] Applying 60 FPS Direct3D 11 fast flags (per-user + per-version)...
+        set "SETTINGS_JSON={\"DFIntTaskSchedulerTargetFps\":60,\"FFlagTaskSchedulerLimitTargetFpsTo240\":\"False\",\"FFlagDebugGraphicsPreferD3D11\":\"True\",\"FFlagDebugGraphicsDisableDirect3D11\":\"False\",\"DFFlagDisableDPIScale\":\"True\",\"FFlagGraphicsDirect3D11ForceD3D11\":\"True\",\"FFlagDebugGraphicsPreferD3D11FL10\":\"True\",\"DFIntCanHideGuiGroupId\":32380007,\"FIntRenderShadowIntensity\":0,\"DFIntDebugFRMQualityLevelOverride\":1}"
+        mkdir "%LOCALAPPDATA%\Roblox\ClientSettings" >nul 2>&1
         echo !SETTINGS_JSON! > "%LOCALAPPDATA%\Roblox\ClientSettings\ClientAppSettings.json"
-
         for /d %%D in ("%LOCALAPPDATA%\Roblox\Versions\*") do (
             if exist "%%D\RobloxPlayerBeta.exe" (
-                mkdir "%%D\ClientSettings" 2>nul
+                mkdir "%%D\ClientSettings" >nul 2>&1
                 echo !SETTINGS_JSON! > "%%D\ClientSettings\ClientAppSettings.json"
-                reg add "HKCU\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" /v "%%D\RobloxPlayerBeta.exe" /t REG_SZ /d "~ HIGHDPIAWARE RUNASADMIN" /f 2>nul
-            )
-            if exist "%%D\RobloxStudioBeta.exe" (
-                mkdir "%%D\ClientSettings" 2>nul
-                echo !SETTINGS_JSON! > "%%D\ClientSettings\ClientAppSettings.json"
+                reg add "HKCU\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" /v "%%D\RobloxPlayerBeta.exe" /t REG_SZ /d "~ HIGHDPIAWARE" /f >nul 2>&1
+                set "LAUNCHER=%%D\RobloxPlayerLauncher.exe"
+                set "PLAYER=%%D\RobloxPlayerBeta.exe"
             )
         )
-
-        echo [*] Checking Roblox Player installation...
-        if not exist "%LOCALAPPDATA%\Roblox\Versions\*\RobloxPlayerBeta.exe" (
-            echo Downloading latest Roblox Player installer from clean CDN...
-            curl -L -o "%TEMP%\RobloxPlayerInstaller.exe" "https://setup.rbxcdn.com/RobloxPlayerInstaller.exe"
-            echo Launching Roblox Player installer...
-            start "" "%TEMP%\RobloxPlayerInstaller.exe"
-            echo [INFO] Installer started. Follow on-screen prompts if required.
+        
+        echo [7/8] Registering the roblox-player:// protocol (Play buttons work from any browser)...
+        if defined LAUNCHER (
+            reg add "HKCU\Software\Classes\roblox-player\shell\open\command" /ve /d "\"!LAUNCHER!\" \"%%1\"" /f >nul 2>&1
+            reg add "HKCU\Software\Classes\roblox-player\DefaultIcon" /ve /d "\"!PLAYER!\",0" /f >nul 2>&1
+            reg add "HKCU\Software\Classes\roblox\shell\open\command" /ve /d "\"!LAUNCHER!\" \"%%1\"" /f >nul 2>&1
+            echo       protocol handler -^> !LAUNCHER!
+        ) else ( echo       [WARN] launcher not found - protocol not registered )
+        
+        echo [8/8] Firewall + performance profile for Roblox...
+        netsh advfirewall firewall add rule name="M11 Roblox Player" dir=in action=allow program="%LOCALAPPDATA%\Roblox\Versions\*\RobloxPlayerBeta.exe" >nul 2>&1
+        reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v "%LOCALAPPDATA%\Roblox\Versions\*\RobloxPlayerBeta.exe" /t REG_SZ /d "GpuPreference=2;" /f >nul 2>&1
+        
+        echo.
+        echo ---- VERIFICATION: launching the client for 20 seconds ----
+        if not defined PLAYER (
+            echo [WARN] client not installed yet - skipping the launch test.
+            goto FINISH
+        )
+        echo       starting !PLAYER!
+        start "" "!PLAYER!"
+        timeout /t 20 /nobreak >nul
+        tasklist /fi "imagename eq RobloxPlayerBeta.exe" | find /i "RobloxPlayerBeta.exe" >nul 2>&1
+        if !errorlevel! EQU 0 (
+            echo [SUCCESS] RobloxPlayerBeta.exe is RUNNING (client launches correctly).
+            tasklist /fi "imagename eq RobloxPlayerBeta.exe" | find /i "RobloxPlayerBeta.exe"
+            taskkill /f /im RobloxPlayerBeta.exe >nul 2>&1
         ) else (
-            echo [SUCCESS] Roblox Player is installed and optimized for 60 FPS!
+            echo [WARN] client did not stay running - last crash log:
+            if exist "%LOCALAPPDATA%\Roblox\logs" for /f "delims=" %%L in ('dir /b /o-d "%LOCALAPPDATA%\Roblox\logs\*.log" 2^>nul') do (
+                echo ---- %%L ----
+                powershell -NoProfile -Command "Get-Content '%LOCALAPPDATA%\Roblox\logs\%%L' -Tail 12" 2>nul
+                goto LOGDONE
+            )
+            :LOGDONE
         )
-
+        
+        :FINISH
         echo.
         echo ==============================================================================
-        echo [SUCCESS] Roblox 60 FPS ^& VM Hyper-Bypass applied successfully!
+        echo [DONE] Roblox Player ^& Studio deployment finished (v1.14, silent + verified).
         echo ==============================================================================
-
+        if /i "%~1"=="nopause" exit /b 0
+        if "%~1"=="0" exit /b 0
+        pause
+        exit /b 0
+        
+        :ROBLOX_INSTALLED
+        set "INSTALLED=0"
+        for /d %%D in ("%LOCALAPPDATA%\Roblox\Versions\*") do (
+            if exist "%%D\RobloxPlayerBeta.exe" set "INSTALLED=1"
+        )
+        exit /b 0
         '@
 
         # 2. Gaming Stores Engine
