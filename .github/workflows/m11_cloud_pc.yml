@@ -2,6 +2,10 @@ name: M11 Tool - PC 16GB Datacenter (v1.11 M11 Quantum Enterprise Edition)
 on:
   workflow_dispatch:
     inputs:
+      run_engine_test:
+        description: 'Run the live engine test pass (slower boot, uploads a report via cloud sync)'
+        required: false
+        default: 'false'
       tunnel_provider:
         description: 'Tunnel Provider (tailscale, pinggy, or ngrok)'
         required: true
