@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion
 chcp 65001 >nul 2>&1
-title M11 ENGINE 00 - System & 3D Gaming Turbo Optimizer
+title M11 ENGINE 00 - System ^& 3D Gaming Turbo Optimizer
 color 0a
 cd /d "%~dp0"
 
