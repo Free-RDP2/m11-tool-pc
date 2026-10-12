@@ -11,6 +11,7 @@
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 $log = 'C:\M11Data\m11_repair_v112_log.txt'
+if (Test-Path $log) { Remove-Item $log -Force -ErrorAction SilentlyContinue }
 function Log($m) { $line = "$(Get-Date -Format 'HH:mm:ss') | $m"; Write-Host $line; Add-Content -Path $log -Value $line -Encoding UTF8 }
 Log '===================== M11 v1.12 REPAIR START ====================='
 
