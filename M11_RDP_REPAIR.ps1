@@ -75,6 +75,39 @@ if ($toolDirs.Count -eq 0) {
 $toolDirs = $toolDirs | Select-Object -Unique
 foreach ($t in $toolDirs) { Log ("    toolkit: " + $t) }
 
+# ------------------------------------- 2b. purge OLD M11 builds (stale copies)
+Log '[C2] Purging old M11 builds inside the toolkit'
+$managedNames = @(
+    'M11_MASTER_RUNNER.bat', 'M11_MASTER_CONTROL_CENTER.bat', 'MASTER_RUNNER.bat',
+    'M11_UNIVERSAL_STORE.bat', 'DOWNLOAD_GTA_V_AND_HEAVY_GAMES.bat',
+    'M11_SELF_TEST.bat', '_M11_SELF_TEST.bat'
+)
+$purgedOld = 0
+foreach ($t in $toolDirs) {
+    Get-ChildItem -LiteralPath $t -Recurse -File -Force -ErrorAction SilentlyContinue | ForEach-Object {
+        $base = $_.Name
+        foreach ($m in $managedNames) {
+            if ($base -like ('*' + $m)) {
+                # our fresh build is written again in the next step, so removing is safe
+                Log ('    removing old build: ' + $_.FullName.Replace($t, '<toolkit>'))
+                Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+                $purgedOld++
+                break
+            }
+        }
+    }
+    # drop now-empty engine folders left behind (wrong-name variants)
+    Get-ChildItem -LiteralPath $t -Directory -Recurse -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like '*_Engines_And_Scripts*' -and $_.Name -ne $engName } |
+        ForEach-Object {
+            if (-not (Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue)) {
+                Log ('    removing empty variant folder: ' + $_.Name)
+                Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+}
+Log ('    purged ' + $purgedOld + ' old toolkit files')
+
 # ------------------------------------------------- 3. deploy fixed files
 Log '[D] Deploying corrected files (UTF-8, no BOM)'
 foreach ($t in $toolDirs) {
