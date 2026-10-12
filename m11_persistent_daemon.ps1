@@ -42,7 +42,8 @@ function Invoke-M11SafeSync {
         if (Test-Path $zipPath) { Remove-Item $zipPath -Force -ErrorAction SilentlyContinue }
         Compress-Archive -Path "$staging\*" -DestinationPath $zipPath -Force -ErrorAction SilentlyContinue
         if (-not (Test-Path $zipPath)) { Write-M11Log "[SYNC] archive creation failed"; return }
-        $sha256 = (Get-FileHash -Algorithm SHA256 -Path $zipPath).Hash
+        try { $sha256 = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.IO.File]::ReadAllBytes($zipPath))).Replace('-','') }
+        catch { $sha256 = (Get-Item $zipPath).Length.ToString() }
         $lastHash = ""
         if (Test-Path $hashPath) { $lastHash = (Get-Content $hashPath -Raw).Trim() }
         if ($sha256 -eq $lastHash -and -not $ForceNow) { return }
