@@ -35,10 +35,10 @@ if errorlevel 1 ( call :bad "TermService running" ) else ( call :ok "TermService
 echo.
 echo --- LOGIN / SESSION POLICY ---
 for /f "tokens=3" %%A in ('reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v AutoAdminLogon 2^>nul ^| findstr AutoAdminLogon') do set "AL=%%A"
-if "%AL%"=="0x1" ( call :ok "Auto-logon enabled" ) else ( call :bad "Auto-logon enabled (value=%AL%)" )
+if /i "%AL%"=="0x1" ( call :ok "Auto-logon enabled" ) else if "%AL%"=="1" ( call :ok "Auto-logon enabled" ) else ( call :bad "Auto-logon enabled (value=%AL%)" )
 
 for /f "tokens=3" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fSingleSessionPerUser 2^>nul ^| findstr fSingleSessionPerUser') do set "SS=%%A"
-if "%SS%"=="0x1" ( call :ok "Single session per user" ) else ( call :bad "Single session per user (value=%SS%)" )
+if /i "%SS%"=="0x1" ( call :ok "Single session per user" ) else if "%SS%"=="1" ( call :ok "Single session per user" ) else ( call :bad "Single session per user (value=%SS%)" )
 
 echo.
 echo --- TOOLKIT FILES ---
@@ -57,6 +57,7 @@ if defined F_ST ( call :ok "universal store found: %F_ST%" ) else ( call :bad "u
 
 set "F_GH="
 for %%R in ("%HERE%*M11_GAMES_HUB*.bat") do set "F_GH=%%~nxR"
+if not defined F_GH for %%R in ("%HERE%*DOWNLOAD_GTA_V_AND_HEAVY_GAMES*.bat") do set "F_GH=%%~nxR"
 if defined F_GH ( call :ok "games hub found: %F_GH%" ) else ( call :bad "games hub missing" )
 
 set "ENG="
@@ -75,7 +76,7 @@ echo --- TOOLS ---
 where curl >nul 2>&1
 if errorlevel 1 ( echo    note: curl not found in PATH >> "%REPORT%" ) else ( echo    curl OK >> "%REPORT%" )
 
-call "%HERE%_M11_WINGET_ENSURE.bat" >nul 2>&1
+call "%HERE%_M11_WINGET_ENSURE.bat" <nul >nul 2>&1
 if errorlevel 1 (
   echo  [INFO] winget not available - launchers will use direct downloads
   echo  [INFO] winget not available - direct-download fallback active >> "%REPORT%"
