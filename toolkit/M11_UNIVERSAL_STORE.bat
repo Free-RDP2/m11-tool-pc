@@ -6,14 +6,14 @@ color 0b
 cd /d "%~dp0"
 
 rem --- winget availability gate (works under SYSTEM too) ---
-call "%~dp0_M11_WINGET_ENSURE.bat"
+call "%~dp0_M11_WINGET_ENSURE.bat" <nul
 set "WG_OK=%errorlevel%"
 if not "%WG_OK%"=="0" (
     echo.
-    echo  [!] winget غير متاح على هذه النسخة من ويندوز.
-    echo      الحل: شغّل هذا الملف مرة أخرى بعد تشغيل Windows Update،
-    echo      أو ثبّت "App Installer" من متجر مايكروسوفت ثم أعد المحاولة.
-    echo      ملاحظة: يتم الآن محاولة التنزيل المباشر من المصادر الرسمية.
+        echo  [!] winget is not available on this Windows build.
+        echo      Fix: run this file again after Windows Update finishes,
+        echo      or install "App Installer" from the Microsoft Store,
+        echo      then run it again. Direct downloads are used meanwhile.
     echo.
 )
 
@@ -24,22 +24,31 @@ echo ===========================================================================
 echo        M11 UNIVERSAL STORE - Games ^& Apps Hub ^(v1.12 fixed^)
 echo        Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
 echo ==============================================================================
-echo  ملاحظة: كل ما يلي يُثبَّت من المصادر الرسمية المجانية (winget).
-echo  ملاحظة مهمة: الألعاب المدفوعة (GTA V / أي لعبة مدفوعة) يجب شراؤها
-echo  من المتجر الرسمي. هذا المركز يثبّت الـ Launchers والمتاجر فقط.
+echo  Note: everything below is installed from the official free sources (winget).
+echo  Important: paid games (GTA V / any paid game) must be bought
+echo  from the official store. This hub installs launchers and stores only.
 echo ==============================================================================
-echo   [1]  المتاجر الرسمية للألعاب (Steam / Epic / Rockstar / EA)
-echo   [2]  المتصفحات (Chrome / Brave / Firefox)
-echo   [3]  أدوات المطورين (VS Code / Git / Python / NodeJS)
-echo   [4]  أدوات الاتصال (Discord / Zoom / TeamViewer)
-echo   [5]  أدوات ضغط وملفات (7-Zip / WinRAR / Everything)
-echo   [6]  أدوات الألعاب المجانية (RetroArch / Steam بلا متجر)
-echo   [7]  تحديث كل البرامج المثبتة
-echo   [0]  رجوع
+echo   [1]  Official game stores (Steam / Epic / Rockstar / EA)
+echo   [2]  Browsers (Chrome / Brave / Firefox)
+echo   [3]  Developer tools (VS Code / Git / Python / NodeJS)
+echo   [4]  Communication tools (Discord / Zoom / TeamViewer)
+echo   [5]  Archive and file tools (7-Zip / WinRAR / Everything)
+echo   [6]  Free game tools (RetroArch / portable Steam)
+echo   [7]  Upgrade every installed program
+echo   [0]  Back
 echo ==============================================================================
 set "opt="
-set /p opt="اختر رقم [0-7]: "
-if not defined opt goto menu
+rem --- optional command line argument: M11 script 0|1|2... runs that entry directly ---
+if not "%~1"=="" set "opt=%~1"
+if defined opt goto dispatch
+set /p opt="Choice [0-7]: "
+if not defined opt (
+    echo.
+    echo [!] No input available ^(non-interactive session^) - closing.
+    timeout /t 2 >nul
+    exit /b 9
+)
+:dispatch
 
 if "%opt%"=="1" goto stores
 if "%opt%"=="2" goto browsers
