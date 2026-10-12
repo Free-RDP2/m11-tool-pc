@@ -1,28 +1,28 @@
 @echo off
 setlocal EnableDelayedExpansion
 chcp 65001 >nul 2>&1
-title M11 SELF TEST - Toolkit Verification
+title M11 SELF TEST - Toolkit Verification (v1.12)
 color 0e
 
-set "HOME_DIR=%USERPROFILE%\Desktop"
-set "REPORT=%HOME_DIR%\M11_SELF_TEST_REPORT.txt"
-set "FAIL=0"
+set "HERE=%~dp0"
+set "REPORT=%USERPROFILE%\Desktop\M11_SELF_TEST_REPORT.txt"
+if not exist "%USERPROFILE%\Desktop" set "REPORT=C:\M11Data\M11_SELF_TEST_REPORT.txt"
 set "PASS=0"
-if not exist "%HOME_DIR%" set "HOME_DIR=C:\M11Data" & if not exist "%HOME_DIR%" mkdir "%HOME_DIR%"
-set "REPORT=%HOME_DIR%\M11_SELF_TEST_REPORT.txt"
+set "FAIL=0"
 
-echo M11 SELF TEST REPORT > "%REPORT%"
+echo M11 SELF TEST REPORT (v1.12) > "%REPORT%"
 echo Generated: %DATE% %TIME% >> "%REPORT%"
 echo ============================================================ >> "%REPORT%"
 
 echo.
 echo --- SYSTEM ---
 reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v ProductName >> "%REPORT%" 2>&1
+
 net session >nul 2>&1
 if errorlevel 1 ( call :bad "Administrator rights" ) else ( call :ok "Administrator rights" )
 
 netstat -ano | findstr /r /c:":3389 .*LISTENING" >nul 2>&1
-if errorlevel 1 ( call :bad "RDP 3389 listening" ) else ( call :ok "RDP 3389 listening" )
+if errorlevel 1 ( call :bad "RDP port 3389 listening" ) else ( call :ok "RDP port 3389 listening" )
 
 if exist "C:\Program Files\Tailscale\tailscale.exe" ( call :ok "Tailscale installed" ) else ( call :bad "Tailscale installed" )
 
@@ -33,8 +33,7 @@ sc query TermService | findstr /i RUNNING >nul 2>&1
 if errorlevel 1 ( call :bad "TermService running" ) else ( call :ok "TermService running" )
 
 echo.
-echo --- AUTOLOGON ---
-reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v AutoAdminLogon >> "%REPORT%" 2>&1
+echo --- LOGIN / SESSION POLICY ---
 for /f "tokens=3" %%A in ('reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v AutoAdminLogon 2^>nul ^| findstr AutoAdminLogon') do set "AL=%%A"
 if "%AL%"=="0x1" ( call :ok "Auto-logon enabled" ) else ( call :bad "Auto-logon enabled (value=%AL%)" )
 
@@ -43,23 +42,55 @@ if "%SS%"=="0x1" ( call :ok "Single session per user" ) else ( call :bad "Single
 
 echo.
 echo --- TOOLKIT FILES ---
-set "HERE=%~dp0"
+rem name-independent: the launchers may carry an emoji/ASCII prefix
+set "F_RUN="
+for %%R in ("%HERE%*MASTER_RUNNER*.bat") do set "F_RUN=%%~nxR"
+if defined F_RUN ( call :ok "runner found: %F_RUN%" ) else ( call :bad "runner launcher missing" )
+
+set "F_CC="
+for %%R in ("%HERE%*MASTER_CONTROL_CENTER*.bat") do set "F_CC=%%~nxR"
+if defined F_CC ( call :ok "control center found: %F_CC%" ) else ( call :bad "control center missing" )
+
+set "F_ST="
+for %%R in ("%HERE%*M11_UNIVERSAL_STORE*.bat") do set "F_ST=%%~nxR"
+if defined F_ST ( call :ok "universal store found: %F_ST%" ) else ( call :bad "universal store missing" )
+
+set "F_GH="
+for %%R in ("%HERE%*M11_GAMES_HUB*.bat") do set "F_GH=%%~nxR"
+if defined F_GH ( call :ok "games hub found: %F_GH%" ) else ( call :bad "games hub missing" )
+
 set "ENG="
 if exist "%HERE%_Engines_And_Scripts\" set "ENG=%HERE%_Engines_And_Scripts"
-for /d %%D in ("%HERE%*_Engines_And_Scripts") do set "ENG=%%~fD"
-if not defined ENG for /d %%D in ("%HERE%..\*_Engines_And_Scripts") do set "ENG=%%~fD"
-
-if exist "%HERE%M11_MASTER_RUNNER.bat" ( call :ok "runner: M11_MASTER_RUNNER.bat" ) else ( call :bad "runner: M11_MASTER_RUNNER.bat" )
-if exist "%HERE%M11_MASTER_CONTROL_CENTER.bat" ( call :ok "center: M11_MASTER_CONTROL_CENTER.bat" ) else ( call :bad "center: M11_MASTER_CONTROL_CENTER.bat" )
-if defined ENG ( call :ok "engines folder: %ENG%" ) else ( call :bad "engines folder missing" )
+if not defined ENG for /d %%D in ("%HERE%*Engines_And_Scripts*") do set "ENG=%%~fD"
 
 if defined ENG (
-  for %%E in ("%ENG%\*.bat") do call :ok "engine: %%~nxE"
+  call :ok "engines folder found"
+  for %%E in ("%ENG%\[0-9]*.bat") do call :ok "engine: %%~nxE"
+) else (
+  call :bad "engines folder found"
 )
 
 echo.
-echo --- MOJIBAKE SCAN ---
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$bad=0; $dirs=@('C:\Users\M11 Dev-Tool\Desktop','C:\Users\runneradmin\Desktop','C:\Users\Public\Desktop') ^| Where-Object { Test-Path $_ }; foreach($d in $dirs){ Get-ChildItem $d -Recurse -Force -ErrorAction SilentlyContinue ^| ForEach-Object { if($_.Name -match '^\?+'){ $bad++; Write-Host ('  BAD NAME: ' + $_.FullName) } elseif(-not $_.PSIsContainer -and $_.Length -lt 300000 -and $_.Extension -match '\.(bat|cmd|ps1|txt|json)$'){ $t=[IO.File]::ReadAllText($_.FullName); if($t -match '\?\?\?\?\?'){ $bad++; Write-Host ('  BAD CONTENT: ' + $_.FullName) } } } }; if($bad -eq 0){ Write-Host '  CLEAN: no mojibake found' } else { Write-Host ('  FOUND ' + $bad + ' mojibake items') }" 2>&1 | powershell -NoProfile -Command "$input | Tee-Object -FilePath '%REPORT%' -Append"
+echo --- TOOLS ---
+where curl >nul 2>&1
+if errorlevel 1 ( echo    note: curl not found in PATH >> "%REPORT%" ) else ( echo    curl OK >> "%REPORT%" )
+
+call "%HERE%_M11_WINGET_ENSURE.bat" >nul 2>&1
+if errorlevel 1 (
+  echo  [INFO] winget not available - launchers will use direct downloads
+  echo  [INFO] winget not available - direct-download fallback active >> "%REPORT%"
+) else (
+  echo        resolved: %M11_WINGET% >> "%REPORT%"
+  if "%M11_WINGET%"=="winget" ( call :ok "winget available on PATH" ) else ( call :ok "winget found: %M11_WINGET%" )
+)
+
+echo.
+echo --- MOJIBAKE / INTEGRITY SCAN ---
+if exist "%HERE%_M11_MOJI_CHECK.ps1" (
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%HERE%_M11_MOJI_CHECK.ps1" 2>&1 | findstr /v "^$"
+) else (
+  echo   (checker not found - skipping)
+)
 
 echo.
 echo --- SESSION STATE ---
