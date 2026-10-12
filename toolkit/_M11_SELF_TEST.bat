@@ -104,6 +104,7 @@ echo  RESULT: %PASS% passed, %FAIL% failed
 echo  Full report: %REPORT%
 echo ============================================================
 echo RESULT: %PASS% passed, %FAIL% failed >> "%REPORT%"
+if /i "%~1"=="nopause" exit /b 0
 echo (press any key to close)
 pause >nul
 exit /b 0
