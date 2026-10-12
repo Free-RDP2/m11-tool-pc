@@ -25,7 +25,7 @@ for /d %%D in ("%SELF%..\*_Engines_And_Scripts") do set "ENG=%%~fD"
 
 if not defined ENG (
     echo [!] Engines folder not found next to this runner.
-    echo     Expected: M11_TOOL_PC\ (<any>_Engines_And_Scripts)
+    echo     Expected: M11_TOOL_PC\[name]_Engines_And_Scripts
     echo.
     pause
     exit /b 1
