@@ -5,6 +5,19 @@ title M11 UNIVERSAL STORE - Games & Apps Hub (v1.12)
 color 0b
 cd /d "%~dp0"
 
+rem --- winget availability gate (works under SYSTEM too) ---
+call "%~dp0_M11_WINGET_ENSURE.bat"
+set "WG_OK=%errorlevel%"
+if not "%WG_OK%"=="0" (
+    echo.
+    echo  [!] winget غير متاح على هذه النسخة من ويندوز.
+    echo      الحل: شغّل هذا الملف مرة أخرى بعد تشغيل Windows Update،
+    echo      أو ثبّت "App Installer" من متجر مايكروسوفت ثم أعد المحاولة.
+    echo      ملاحظة: يتم الآن محاولة التنزيل المباشر من المصادر الرسمية.
+    echo.
+)
+
+
 :menu
 cls
 echo ==============================================================================
@@ -41,13 +54,13 @@ goto menu
 :stores
 cls
 echo [1/4] Steam...
-winget install --id Valve.Steam -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id Valve.Steam -e --silent --accept-package-agreements --accept-source-agreements
 echo [2/4] Epic Games Launcher...
-winget install --id EpicGames.EpicGamesLauncher -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id EpicGames.EpicGamesLauncher -e --silent --accept-package-agreements --accept-source-agreements
 echo [3/4] EA App...
-winget install --id ElectronicArts.EADesktop -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id ElectronicArts.EADesktop -e --silent --accept-package-agreements --accept-source-agreements
 echo [4/4] Rockstar Games Launcher...
-winget install --id RockstarGames.Launcher -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id RockstarGames.Launcher -e --silent --accept-package-agreements --accept-source-agreements
 echo [DONE] Official game stores installed. Sign in to buy/download your games.
 pause
 goto menu
@@ -55,61 +68,61 @@ goto menu
 :browsers
 cls
 echo [1/3] Google Chrome...
-winget install --id Google.Chrome -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id Google.Chrome -e --silent --accept-package-agreements --accept-source-agreements
 echo [2/3] Brave...
-winget install --id Brave.Brave -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id Brave.Brave -e --silent --accept-package-agreements --accept-source-agreements
 echo [3/3] Firefox...
-winget install --id Mozilla.Firefox -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id Mozilla.Firefox -e --silent --accept-package-agreements --accept-source-agreements
 pause
 goto menu
 
 :dev
 cls
 echo [1/4] Visual Studio Code...
-winget install --id Microsoft.VisualStudioCode -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id Microsoft.VisualStudioCode -e --silent --accept-package-agreements --accept-source-agreements
 echo [2/4] Git...
-winget install --id Git.Git -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id Git.Git -e --silent --accept-package-agreements --accept-source-agreements
 echo [3/4] Python 3.12...
-winget install --id Python.Python.3.12 -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id Python.Python.3.12 -e --silent --accept-package-agreements --accept-source-agreements
 echo [4/4] NodeJS LTS...
-winget install --id OpenJS.NodeJS.LTS -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id OpenJS.NodeJS.LTS -e --silent --accept-package-agreements --accept-source-agreements
 pause
 goto menu
 
 :comm
 cls
 echo [1/3] Discord...
-winget install --id Discord.Discord -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id Discord.Discord -e --silent --accept-package-agreements --accept-source-agreements
 echo [2/3] Zoom...
-winget install --id Zoom.Zoom -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id Zoom.Zoom -e --silent --accept-package-agreements --accept-source-agreements
 echo [3/3] TeamViewer...
-winget install --id TeamViewer.TeamViewer -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id TeamViewer.TeamViewer -e --silent --accept-package-agreements --accept-source-agreements
 pause
 goto menu
 
 :utils
 cls
 echo [1/3] 7-Zip...
-winget install --id 7zip.7zip -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id 7zip.7zip -e --silent --accept-package-agreements --accept-source-agreements
 echo [2/3] RAR...
-winget install --id RARLab.WinRAR -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id RARLab.WinRAR -e --silent --accept-package-agreements --accept-source-agreements
 echo [3/3] Everything search...
-winget install --id voidtools.Everything -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id voidtools.Everything -e --silent --accept-package-agreements --accept-source-agreements
 pause
 goto menu
 
 :freegames
 cls
 echo [1/2] RetroArch (free open-source multi-system emulator)...
-winget install --id Libretro.RetroArch -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id Libretro.RetroArch -e --silent --accept-package-agreements --accept-source-agreements
 echo [2/2] itch.io app (free indie games)...
-winget install --id ItchIo.Itch -e --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" install --id ItchIo.Itch -e --silent --accept-package-agreements --accept-source-agreements
 pause
 goto menu
 
 :upgrade
 cls
 echo Upgrading all installed packages...
-winget upgrade --all --silent --accept-package-agreements --accept-source-agreements
+"%M11_WINGET%" upgrade --all --silent --accept-package-agreements --accept-source-agreements
 pause
 goto menu
