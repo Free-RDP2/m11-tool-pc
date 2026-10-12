@@ -959,19 +959,20 @@ jobs:
         @echo off
         setlocal EnableDelayedExpansion
         chcp 65001 >nul 2>&1
-        title M11 ROBLOX PLAYER + STUDIO DEPLOYER (v3)
+        title M11 ROBLOX PLAYER + STUDIO DEPLOYER (v3.1)
         color 0a
         
         rem ============================================================================
-        rem  M11 TOOL - PC : ENGINE 01 v3 - Roblox Player + Studio Deployer
+        rem  M11 TOOL - PC : ENGINE 01 v3.1 - Roblox Player + Studio Deployer
         rem  Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         rem  What it does:
-        rem    1. Installs Roblox Player silently (winget -> direct -> versioned CDN)
+        rem    1. Installs Roblox Player silently (winget -> official installer -> CDN)
         rem    2. Installs Roblox Studio silently (the client that DOES run on VMs)
-        rem    3. Applies 60 FPS Direct3D11 fast flags for every installed version
-        rem    4. Registers the roblox-player:// protocol so Play buttons work
+        rem    3. Applies 60 FPS Direct3D11 fast flags to EVERY version folder, and
+        rem       PROVES the JSON is valid (no more silent broken settings file)
+        rem    4. Registers roblox-player / roblox-studio protocols so Play works
         rem    5. Applies the known anti-VM-detection mitigations (best effort)
-        rem    6. LAUNCH-TESTS both apps and writes an honest report to the Desktop
+        rem    6. LAUNCH-TESTS both apps and writes an honest report with real evidence
         rem  Honest note: Roblox Player refuses to start on virtual machines by design
         rem  (Hyperion anti-cheat). The mitigations below help where the VM is only
         rem  detected through guest features - on a real PC this engine gives a
@@ -981,18 +982,20 @@ jobs:
         set "LOGDIR=C:\M11Data"
         if not exist "%LOGDIR%" set "LOGDIR=%TEMP%"
         set "RPT=%LOGDIR%\m11_roblox_report.txt"
-        set "MODE=%~1"
+        
+        set "SETTINGS_JSON={"DFIntTaskSchedulerTargetFps":60,"FFlagTaskSchedulerLimitTargetFpsTo240":"False","FFlagDebugGraphicsPreferD3D11":"True","FFlagDebugGraphicsDisableDirect3D11":"False","DFFlagDisableDPIScale":"True","FFlagGraphicsDirect3D11ForceD3D11":"True","FFlagDebugGraphicsPreferD3D11FL10":"True","DFIntCanHideGuiGroupId":32380007,"FIntRenderShadowIntensity":0,"DFIntDebugFRMQualityLevelOverride":1}"
         
         echo ==============================================================================
-        echo    M11 ROBLOX DEPLOYER v3 - Player + Studio, silent and verified
+        echo    M11 ROBLOX DEPLOYER v3.1 - Player + Studio, silent and verified
         echo ==============================================================================
         echo. > "%RPT%"
-        echo ===== M11 ROBLOX v3 %DATE% %TIME% ===== >> "%RPT%"
+        echo ===== M11 ROBLOX v3.1 %DATE% %TIME% ===== >> "%RPT%"
         echo user=%USERNAME% profile=%USERPROFILE% >> "%RPT%"
         
         echo [1/9] Stopping lingering Roblox processes...
         taskkill /f /im RobloxPlayerBeta.exe >nul 2>&1
         taskkill /f /im RobloxStudioBeta.exe >nul 2>&1
+        taskkill /f /im RobloxCrashHandler.exe >nul 2>&1
         taskkill /f /im RobloxPlayerInstaller.exe >nul 2>&1
         
         echo [2/9] Cleaning corrupt Roblox state (installed versions are kept)...
@@ -1020,6 +1023,7 @@ jobs:
         if "!PINST!"=="0" (
             curl.exe -fsSL --max-time 300 -o "%TEMP%\RobloxPlayerInstaller.exe" "https://setup.rbxcdn.com/RobloxPlayerInstaller.exe"
             if exist "%TEMP%\RobloxPlayerInstaller.exe" start "" /wait "%TEMP%\RobloxPlayerInstaller.exe" -install -silent
+            ping -n 6 127.0.0.1 >nul
             call :PLAYER_INSTALLED
         )
         echo       player installed = !PINST! >> "%RPT%"
@@ -1031,7 +1035,7 @@ jobs:
             curl.exe -fsSL --max-time 300 -o "%TEMP%\RobloxStudioInstaller.exe" "https://setup.rbxcdn.com/RobloxStudioInstaller.exe"
             if exist "%TEMP%\RobloxStudioInstaller.exe" (
                 start "" /wait "%TEMP%\RobloxStudioInstaller.exe" -silent
-                timeout /t 20 /nobreak >nul
+                ping -n 21 127.0.0.1 >nul
             )
             call :STUDIO_INSTALLED
             if "!SINST!"=="0" (
@@ -1044,36 +1048,46 @@ jobs:
         if "!SINST!"=="1" (echo       Studio: installed.) else (echo       Studio: not installed yet - run this engine again later.)
         
         echo [6/9] Applying 60 FPS Direct3D11 fast flags to every installed version...
-        set "SETTINGS_JSON={"DFIntTaskSchedulerTargetFps":60,"FFlagTaskSchedulerLimitTargetFpsTo240":"False","FFlagDebugGraphicsPreferD3D11":"True","FFlagDebugGraphicsDisableDirect3D11":"False","DFFlagDisableDPIScale":"True","FFlagGraphicsDirect3D11ForceD3D11":"True","FFlagDebugGraphicsPreferD3D11FL10":"True","DFIntCanHideGuiGroupId":32380007,"FIntRenderShadowIntensity":0,"DFIntDebugFRMQualityLevelOverride":1}"
+        set "FLAGN=0"
         mkdir "%LOCALAPPDATA%\Roblox\ClientSettings" >nul 2>&1
         echo !SETTINGS_JSON! > "%LOCALAPPDATA%\Roblox\ClientSettings\ClientAppSettings.json"
-        for %%R in ("C:\Program Files\Roblox\Versions" "%LOCALAPPDATA%\Roblox\Versions" "%LOCALAPPDATA%\Roblox\Studio") do (
+        for %%R in ("C:\Program Files (x86)\Roblox\Versions" "C:\Program Files (x86)\Roblox\Studio" "C:\Program Files\Roblox\Versions" "C:\Program Files\Roblox\Studio" "%LOCALAPPDATA%\Roblox\Versions" "%LOCALAPPDATA%\Roblox\Studio") do (
             if exist %%R (
                 for /d %%D in ("%%~R\*") do (
                     mkdir "%%D\ClientSettings" >nul 2>&1
                     echo !SETTINGS_JSON! > "%%D\ClientSettings\ClientAppSettings.json"
-                    if exist "%%D\RobloxPlayerBeta.exe" set "PLAYER=%%D\RobloxPlayerBeta.exe"
-                    if exist "%%D\RobloxStudioBeta.exe" set "STUDIO=%%D\RobloxStudioBeta.exe"
+                    set /a FLAGN+=1
                 )
             )
         )
-        echo       fast flags written (60 FPS, D3D11, 60 z-buffer shadow off) >> "%RPT%"
-        powershell -NoProfile -Command "try { $p=Join-Path $env:LOCALAPPDATA 'Roblox\ClientSettings\ClientAppSettings.json'; $o=Get-Content $p -Raw | ConvertFrom-Json; $n=(Get-ChildItem 'C:\Program Files\Roblox\Versions' -Directory -ErrorAction SilentlyContinue | Measure-Object).Count; Write-Output ('FLAGS JSON: VALID (fps=' + $o.DFIntTaskSchedulerTargetFps + ', d3d11=' + $o.FFlagDebugGraphicsPreferD3D11 + ', version folders=' + $n + ')') } catch { Write-Output ('FLAGS JSON: INVALID - ' + $_.Exception.Message) }" >> "%RPT%" 2>&1
+        set "LOCALJSON=%LOCALAPPDATA%\Roblox\ClientSettings\ClientAppSettings.json"
+        powershell -NoProfile -Command "try { $o = Get-Content -Raw -LiteralPath (Join-Path $env:LOCALAPPDATA 'Roblox\ClientSettings\ClientAppSettings.json') | ConvertFrom-Json; Write-Output ('FLAGS JSON: VALID fps=' + $o.DFIntTaskSchedulerTargetFps + ' d3d11=' + $o.FFlagDebugGraphicsPreferD3D11) } catch { Write-Output ('FLAGS JSON: INVALID - ' + $_.Exception.Message) }" >> "%RPT%" 2>&1
+        echo       versions folders patched = !FLAGN! >> "%RPT%"
         
-        echo [7/9] Registering the roblox-player and roblox-studio protocols...
+        echo [7/9] Selecting the real launchers and registering protocols...
+        set "PLAYER="
+        set "STUDIO="
+        for /d %%D in ("C:\Program Files (x86)\Roblox\Versions\*") do if not defined PLAYER if exist "%%D\RobloxPlayerBeta.exe" set "PLAYER=%%D\RobloxPlayerBeta.exe"
+        for /d %%D in ("C:\Program Files\Roblox\Versions\*") do if not defined PLAYER if exist "%%D\RobloxPlayerBeta.exe" set "PLAYER=%%D\RobloxPlayerBeta.exe"
+        for /d %%D in ("%LOCALAPPDATA%\Roblox\Versions\*") do if not defined PLAYER if exist "%%D\RobloxPlayerBeta.exe" set "PLAYER=%%D\RobloxPlayerBeta.exe"
+        for /d %%D in ("C:\Program Files\Roblox\Versions\*") do if not defined STUDIO if exist "%%D\RobloxStudioBeta.exe" set "STUDIO=%%D\RobloxStudioBeta.exe"
+        for /d %%D in ("C:\Program Files (x86)\Roblox\Versions\*") do if not defined STUDIO if exist "%%D\RobloxStudioBeta.exe" set "STUDIO=%%D\RobloxStudioBeta.exe"
+        for /d %%D in ("%LOCALAPPDATA%\Roblox\Versions\*") do if not defined STUDIO if exist "%%D\RobloxStudioBeta.exe" set "STUDIO=%%D\RobloxStudioBeta.exe"
+        echo       player launcher = !PLAYER! >> "%RPT%"
+        echo       studio launcher = !STUDIO! >> "%RPT%"
         if defined PLAYER (
             reg add "HKCU\Software\Classes\roblox-player\shell\open\command" /ve /d "\"!PLAYER!\" \"%%1\"" /f >nul 2>&1
             reg add "HKCU\Software\Classes\roblox\shell\open\command" /ve /d "\"!PLAYER!\" \"%%1\"" /f >nul 2>&1
             reg add "HKCU\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" /v "!PLAYER!" /t REG_SZ /d "~ HIGHDPIAWARE" /f >nul 2>&1
-            echo       protocol -^> !PLAYER! >> "%RPT%"
+            reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v "!PLAYER!" /t REG_SZ /d "GpuPreference=2;" /f >nul 2>&1
+            netsh advfirewall firewall add rule name="M11 Roblox Player" dir=in action=allow program="!PLAYER!" >nul 2>&1
+            echo       protocol roblox-player -^> !PLAYER! >> "%RPT%"
         )
         if defined STUDIO (
             reg add "HKCU\Software\Classes\roblox-studio\shell\open\command" /ve /d "\"!STUDIO!\" \"%%1\"" /f >nul 2>&1
             reg add "HKCU\Software\Classes\roblox-studio-auth\shell\open\command" /ve /d "\"!STUDIO!\" \"%%1\"" /f >nul 2>&1
+            netsh advfirewall firewall add rule name="M11 Roblox Studio" dir=in action=allow program="!STUDIO!" >nul 2>&1
         )
-        netsh advfirewall firewall add rule name="M11 Roblox Player" dir=in action=allow program="!PLAYER!" >nul 2>&1
-        netsh advfirewall firewall add rule name="M11 Roblox Studio" dir=in action=allow program="!STUDIO!" >nul 2>&1
-        reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v "!PLAYER!" /t REG_SZ /d "GpuPreference=2;" /f >nul 2>&1
         
         echo [8/9] Anti-VM-detection mitigations (best effort, needs one reboot to bite)...
         powershell -NoProfile -Command "Disable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -NoRestart -ErrorAction SilentlyContinue" >nul 2>&1
@@ -1086,34 +1100,41 @@ jobs:
         echo       mitigations applied (memory integrity off, Hyper-V guest off, hypervisorlaunchtype=off) >> "%RPT%"
         echo       NOTE: a reboot is required for these to take effect. >> "%RPT%"
         
-        echo [9/9] Launch test - Player (20 s) then Studio (30 s)...
+        echo [9/9] Launch test - Player (25 s) then Studio (45 s)...
         set "PVM=unknown"
         if defined PLAYER (
-            echo       testing: !PLAYER! >> "%RPT%"
+            echo       testing player: !PLAYER! >> "%RPT%"
             start "" "!PLAYER!"
-            timeout /t 20 /nobreak >nul
+            ping -n 26 127.0.0.1 >nul
             tasklist /fi "imagename eq RobloxPlayerBeta.exe" | find /i "RobloxPlayerBeta.exe" >nul 2>&1
             if !errorlevel! EQU 0 (
+                tasklist /fi "imagename eq RobloxPlayerBeta.exe" >> "%RPT%" 2>&1
                 echo       [PASS] RobloxPlayerBeta.exe is RUNNING >> "%RPT%"
                 echo [PASS] Player runs on this machine.
                 taskkill /f /im RobloxPlayerBeta.exe >nul 2>&1
                 set "PVM=working"
             ) else (
-                echo       [INFO] Player did not stay open - this is the expected result on a >> "%RPT%"
-                echo       [INFO] virtual machine (Roblox anti-cheat blocks VMs by design). >> "%RPT%"
-                echo [INFO] Player blocked (virtual machine). Studio works.
+                echo       [INFO] Player did not stay open - the expected result on a virtual >> "%RPT%"
+                echo       [INFO] machine (Roblox anti-cheat Hyperion blocks VMs by design). >> "%RPT%"
+                echo [INFO] Player blocked (virtual machine) - Studio still works.
                 set "PVM=blocked"
+            )
+            set "PLOG=%LOCALAPPDATA%\Roblox\logs"
+            for /f "delims=" %%L in ('dir /b /o-d "!PLOG!\*RobloxPlayer*.log" 2^>nul') do if not defined NEWESTLOG set "NEWESTLOG=%%L"
+            if defined NEWESTLOG (
+                echo       newest player log: !NEWESTLOG! >> "%RPT%"
+                findstr /i /c:"virtual machine" "!PLOG!\!NEWESTLOG!" >nul 2>&1 && echo       [EVIDENCE] player log says: virtual machine detected >> "%RPT%"
             )
         ) else ( echo       [WARN] player not installed >> "%RPT%" )
         if defined STUDIO (
-            echo       testing: !STUDIO! >> "%RPT%"
+            echo       testing studio: !STUDIO! >> "%RPT%"
             start "" "!STUDIO!"
-            timeout /t 30 /nobreak >nul
+            ping -n 46 127.0.0.1 >nul
             tasklist /fi "imagename eq RobloxStudioBeta.exe" | find /i "RobloxStudioBeta.exe" >nul 2>&1
             if !errorlevel! EQU 0 (
+                tasklist /fi "imagename eq RobloxStudioBeta.exe" >> "%RPT%" 2>&1
                 echo       [PASS] RobloxStudioBeta.exe is RUNNING >> "%RPT%"
-                echo [PASS] Studio runs on this machine - use it for building and testing games.
-                echo       (Studio is left OPEN on the desktop as proof)
+                echo [PASS] Studio runs on this machine - build and test games from here.
             ) else (
                 echo       [INFO] Studio did not stay open yet (first run can take a while). >> "%RPT%"
             )
@@ -1121,9 +1142,9 @@ jobs:
         
         echo.
         echo ==============================================================================
-        echo  ROBLOX DEPLOYER v3 finished.
-        echo    Player : %PVM%   (report: %RPT%)
-        echo    Studio : installed if available - it is the VM-friendly client.
+        echo  ROBLOX DEPLOYER v3.1 finished.
+        echo    Player : %PVM%    (report: %RPT%)
+        echo    Studio : the VM-friendly Roblox client - install verified above.
         echo ==============================================================================
         if /i "%~1"=="nopause" exit /b 0
         if "%~1"=="0" exit /b 0
@@ -1132,14 +1153,15 @@ jobs:
         
         :PLAYER_INSTALLED
         set "PINST=0"
+        for /d %%D in ("C:\Program Files (x86)\Roblox\Versions\*") do if exist "%%D\RobloxPlayerBeta.exe" set "PINST=1"
         for /d %%D in ("C:\Program Files\Roblox\Versions\*") do if exist "%%D\RobloxPlayerBeta.exe" set "PINST=1"
         for /d %%D in ("%LOCALAPPDATA%\Roblox\Versions\*") do if exist "%%D\RobloxPlayerBeta.exe" set "PINST=1"
         exit /b 0
         
         :STUDIO_INSTALLED
         set "SINST=0"
-        for /d %%D in ("C:\Program Files (x86)\Roblox\Versions\*") do if exist "%%D\RobloxStudioBeta.exe" set "SINST=1"
         for /d %%D in ("C:\Program Files\Roblox\Versions\*") do if exist "%%D\RobloxStudioBeta.exe" set "SINST=1"
+        for /d %%D in ("C:\Program Files (x86)\Roblox\Versions\*") do if exist "%%D\RobloxStudioBeta.exe" set "SINST=1"
         for /d %%D in ("%LOCALAPPDATA%\Roblox\Versions\*") do if exist "%%D\RobloxStudioBeta.exe" set "SINST=1"
         exit /b 0
         '@
