@@ -1,4 +1,12 @@
 @echo off
+rem =====================================================================
+rem  M11 self-elevation guard (v1.14) - engines need admin rights
+rem =====================================================================
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -ArgumentList '%*' -Verb RunAs" >nul 2>&1
+    exit /b
+)
 setlocal EnableDelayedExpansion
 chcp 65001 >nul 2>&1
 title M11 GAMES HUB - Official Launchers ^& Free Games (v1.12)
@@ -111,18 +119,18 @@ if exist "C:\M11Data\dgVoodoo2\dgVoodoo.conf" (
     copy /y "C:\M11Data\dgVoodoo2\*.*" "C:\Windows\System32\" >nul 2>&1
     echo  dgVoodoo2 copied to System32.
 ) else (
-    echo  (skip: dgVoodoo2 not staged in C:\M11Data\dgVoodoo2)
+    echo  ^(skip: dgVoodoo2 not staged in C:\M11Data\dgVoodoo2^)
 )
-echo [DONE] Legacy game compatibility enabled (DirectX 9 / WARP).
+echo [DONE] Legacy game compatibility enabled ^(DirectX 9 / WARP^).
 pause
 goto menu
 
 :perf
 cls
-echo Opening Task Manager (Performance tab)...
+echo Opening Task Manager ^(Performance tab^)...
 start "" taskmgr
 echo.
-echo Tip: over RDP, games rely on the CPU (software rendering).
+echo Tip: over RDP, games rely on the CPU ^(software rendering^).
 echo Lower the resolution to 1280x720 for the highest FPS.
 pause
 goto menu
