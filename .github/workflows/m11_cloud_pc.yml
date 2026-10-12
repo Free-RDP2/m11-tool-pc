@@ -959,11 +959,11 @@ jobs:
         @echo off
         setlocal EnableDelayedExpansion
         chcp 65001 >nul 2>&1
-        title M11 ROBLOX PLAYER + STUDIO DEPLOYER (v3.1)
+        title M11 ROBLOX PLAYER + STUDIO DEPLOYER (v3.2)
         color 0a
         
         rem ============================================================================
-        rem  M11 TOOL - PC : ENGINE 01 v3.1 - Roblox Player + Studio Deployer
+        rem  M11 TOOL - PC : ENGINE 01 v3.2 - Roblox Player + Studio Deployer
         rem  Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         rem  What it does:
         rem    1. Installs Roblox Player silently (winget -> official installer -> CDN)
@@ -986,10 +986,10 @@ jobs:
         set "SETTINGS_JSON={"DFIntTaskSchedulerTargetFps":60,"FFlagTaskSchedulerLimitTargetFpsTo240":"False","FFlagDebugGraphicsPreferD3D11":"True","FFlagDebugGraphicsDisableDirect3D11":"False","DFFlagDisableDPIScale":"True","FFlagGraphicsDirect3D11ForceD3D11":"True","FFlagDebugGraphicsPreferD3D11FL10":"True","DFIntCanHideGuiGroupId":32380007,"FIntRenderShadowIntensity":0,"DFIntDebugFRMQualityLevelOverride":1}"
         
         echo ==============================================================================
-        echo    M11 ROBLOX DEPLOYER v3.1 - Player + Studio, silent and verified
+        echo    M11 ROBLOX DEPLOYER v3.2 - Player + Studio, silent and verified
         echo ==============================================================================
         echo. > "%RPT%"
-        echo ===== M11 ROBLOX v3.1 %DATE% %TIME% ===== >> "%RPT%"
+        echo ===== M11 ROBLOX v3.2 %DATE% %TIME% ===== >> "%RPT%"
         echo user=%USERNAME% profile=%USERPROFILE% >> "%RPT%"
         
         echo [1/9] Stopping lingering Roblox processes...
@@ -1001,7 +1001,7 @@ jobs:
         echo [2/9] Cleaning corrupt Roblox state (installed versions are kept)...
         reg delete "HKCU\Software\ROBLOX Corporation\Environments" /f >nul 2>&1
         rmdir /s /q "%TEMP%\Roblox" >nul 2>&1
-        del /f /q "%LOCALAPPDATA%\Roblox\logs\*.log" >nul 2>&1
+        rem  client logs are kept on purpose: they are the proof of what happened
         
         echo [3/9] Ensuring WebView2 + VC++ 2015-2022 (x86 + x64)...
         if not exist "%PROGRAMFILES(X86)%\Microsoft\EdgeWebView\Application" if not exist "%PROGRAMFILES%\Microsoft\EdgeWebView\Application" (
@@ -1147,7 +1147,7 @@ jobs:
         
         echo.
         echo ==============================================================================
-        echo  ROBLOX DEPLOYER v3.1 finished.
+        echo  ROBLOX DEPLOYER v3.2 finished.
         echo    Player : %PVM%    (report: %RPT%)
         echo    Studio : the VM-friendly Roblox client - install verified above.
         echo ==============================================================================
