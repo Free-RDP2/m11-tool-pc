@@ -1044,7 +1044,7 @@ jobs:
         if "!SINST!"=="1" (echo       Studio: installed.) else (echo       Studio: not installed yet - run this engine again later.)
         
         echo [6/9] Applying 60 FPS Direct3D11 fast flags to every installed version...
-        set "SETTINGS_JSON={\"DFIntTaskSchedulerTargetFps\":60,\"FFlagTaskSchedulerLimitTargetFpsTo240\":\"False\",\"FFlagDebugGraphicsPreferD3D11\":\"True\",\"FFlagDebugGraphicsDisableDirect3D11\":\"False\",\"DFFlagDisableDPIScale\":\"True\",\"FFlagGraphicsDirect3D11ForceD3D11\":\"True\",\"FFlagDebugGraphicsPreferD3D11FL10\":\"True\",\"DFIntCanHideGuiGroupId\":32380007,\"FIntRenderShadowIntensity\":0,\"DFIntDebugFRMQualityLevelOverride\":1}"
+        set "SETTINGS_JSON={"DFIntTaskSchedulerTargetFps":60,"FFlagTaskSchedulerLimitTargetFpsTo240":"False","FFlagDebugGraphicsPreferD3D11":"True","FFlagDebugGraphicsDisableDirect3D11":"False","DFFlagDisableDPIScale":"True","FFlagGraphicsDirect3D11ForceD3D11":"True","FFlagDebugGraphicsPreferD3D11FL10":"True","DFIntCanHideGuiGroupId":32380007,"FIntRenderShadowIntensity":0,"DFIntDebugFRMQualityLevelOverride":1}"
         mkdir "%LOCALAPPDATA%\Roblox\ClientSettings" >nul 2>&1
         echo !SETTINGS_JSON! > "%LOCALAPPDATA%\Roblox\ClientSettings\ClientAppSettings.json"
         for %%R in ("C:\Program Files\Roblox\Versions" "%LOCALAPPDATA%\Roblox\Versions" "%LOCALAPPDATA%\Roblox\Studio") do (
@@ -1058,6 +1058,7 @@ jobs:
             )
         )
         echo       fast flags written (60 FPS, D3D11, 60 z-buffer shadow off) >> "%RPT%"
+        powershell -NoProfile -Command "try { $p=Join-Path $env:LOCALAPPDATA 'Roblox\ClientSettings\ClientAppSettings.json'; $o=Get-Content $p -Raw | ConvertFrom-Json; $n=(Get-ChildItem 'C:\Program Files\Roblox\Versions' -Directory -ErrorAction SilentlyContinue | Measure-Object).Count; Write-Output ('FLAGS JSON: VALID (fps=' + $o.DFIntTaskSchedulerTargetFps + ', d3d11=' + $o.FFlagDebugGraphicsPreferD3D11 + ', version folders=' + $n + ')') } catch { Write-Output ('FLAGS JSON: INVALID - ' + $_.Exception.Message) }" >> "%RPT%" 2>&1
         
         echo [7/9] Registering the roblox-player and roblox-studio protocols...
         if defined PLAYER (
@@ -1112,7 +1113,7 @@ jobs:
             if !errorlevel! EQU 0 (
                 echo       [PASS] RobloxStudioBeta.exe is RUNNING >> "%RPT%"
                 echo [PASS] Studio runs on this machine - use it for building and testing games.
-                taskkill /f /im RobloxStudioBeta.exe >nul 2>&1
+                echo       (Studio is left OPEN on the desktop as proof)
             ) else (
                 echo       [INFO] Studio did not stay open yet (first run can take a while). >> "%RPT%"
             )
