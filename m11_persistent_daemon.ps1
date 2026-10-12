@@ -49,11 +49,25 @@ function Invoke-M11SafeSync {
         if ($sha256 -eq $lastHash -and -not $ForceNow) { return }
         $b64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($zipPath))
         $url = "https://api.github.com/repos/$repo/contents/cloud_state.zip"
-        $sha = $null
-        try { $rf = Invoke-RestMethod -Uri $url -Headers $headers -ErrorAction SilentlyContinue; if ($rf.sha) { $sha = $rf.sha } } catch { }
-        $body = @{ message = "M11 sync [$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $reason"; content = $b64 }
-        if ($sha) { $body["sha"] = $sha }
-        Invoke-RestMethod -Uri $url -Headers $headers -Method Put -Body ($body | ConvertTo-Json) -ErrorAction SilentlyContinue | Out-Null
+        # --- push with retry: another live machine may have written the same file
+        #     (a 409 Conflict means our base sha is stale, so re-read it and retry)
+        $pushed = $false
+        for ($attempt = 1; $attempt -le 4; $attempt++) {
+            $sha = $null
+            try { $rf = Invoke-RestMethod -Uri $url -Headers $headers -ErrorAction Stop; if ($rf.sha) { $sha = $rf.sha } } catch { }
+            $body = @{ message = "M11 sync [$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $reason"; content = $b64 }
+            if ($sha) { $body["sha"] = $sha }
+            try {
+                $resp = Invoke-RestMethod -Uri $url -Headers $headers -Method Put -Body ($body | ConvertTo-Json) -ErrorAction Stop
+                if ($resp -and $resp.content) { $pushed = $true; break }
+            } catch {
+                $code = 0
+                try { $code = [int]$_.Exception.Response.StatusCode } catch { }
+                Write-M11Log "[SYNC RETRY] attempt $attempt failed (http $code) - re-reading remote sha"
+            }
+            Start-Sleep -Seconds (3 * $attempt)
+        }
+        if (-not $pushed) { Write-M11Log "[SYNC ERROR] push failed after 4 attempts - hash NOT updated, will retry next cycle"; return }
         [System.IO.File]::WriteAllText($hashPath, $sha256, (New-Object System.Text.UTF8Encoding($false)))
         [System.IO.File]::WriteAllText("$user\Desktop\LAST_BACKUP_STATUS.txt", "Last Cloud Sync: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | Reason: $reason", (New-Object System.Text.UTF8Encoding($false)))
         Write-M11Log "[SYNC OK] $reason ($([math]::Round((Get-Item $zipPath).Length/1KB,1)) KB)"
