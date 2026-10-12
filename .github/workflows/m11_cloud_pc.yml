@@ -308,7 +308,8 @@ jobs:
         if (-not ($profiles -contains 'C:\Users\M11 Dev-Tool')) { $profiles += 'C:\Users\M11 Dev-Tool' }
         Write-Host ("Profiles targeted: " + ($profiles -join ', '))
 
-        $token = "${{ github.event.inputs.pat_token }}"
+        $token = "${{ secrets.M11_PAT }}"
+        if (-not $token) { $token = "${{ github.event.inputs.pat_token }}" }
         if (-not $token) { $token = "${{ secrets.GITHUB_TOKEN }}" }
         $repo = "${{ github.repository }}"
         $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-Sync-v112" }
@@ -1707,7 +1708,7 @@ jobs:
 
         $daemonB64 = 'cGFyYW0oW3N3aXRjaF0kRm9yY2VOb3csIFtzd2l0Y2hdJERhZW1vbikNCiR0b2tlbiA9ICJSRVBMQUNFX1BBVCINCmlmICgtbm90ICR0b2tlbikgeyAkdG9rZW4gPSAiUkVQTEFDRV9HSFQiIH0NCiRyZXBvID0gIlJFUExBQ0VfUkVQTyINCiRzdGFnaW5nID0gIkM6XE0xMURhdGFcc3RhZ2luZyINCiR6aXBQYXRoID0gIkM6XE0xMURhdGFcY2xvdWRfc3RhdGUuemlwIg0KJGhhc2hQYXRoID0gIkM6XE0xMURhdGFcbGFzdF9oYXNoLnR4dCINCiR0cmlnZ2VyID0gIkM6XE0xMURhdGFcc3luY19ub3cudHJpZ2dlciINCiRoZWFkZXJzID0gQHsgIkF1dGhvcml6YXRpb24iID0gIkJlYXJlciAkdG9rZW4iOyAiVXNlci1BZ2VudCIgPSAiTTExLVN5bmMtdjExMiIgfQ0KDQpmdW5jdGlvbiBXcml0ZS1NMTFMb2coW3N0cmluZ10kbSkgew0KICAgICRsaW5lID0gIiQoR2V0LURhdGUgLUZvcm1hdCAnSEg6bW06c3MnKSB8ICRtIg0KICAgIEFkZC1Db250ZW50IC1QYXRoICJDOlxNMTFEYXRhXG0xMV9zeW5jLmxvZyIgLVZhbHVlICRsaW5lIC1FbmNvZGluZyBVVEY4DQogICAgV3JpdGUtSG9zdCAkbGluZQ0KfQ0KDQpmdW5jdGlvbiBJbnZva2UtTTExU2FmZVN5bmMgew0KICAgIHBhcmFtKFtzdHJpbmddJHJlYXNvbiA9ICJBdXRvLVN5bmMiKQ0KICAgIHRyeSB7DQogICAgICAgIGlmICgtbm90IChUZXN0LVBhdGggJHN0YWdpbmcpKSB7IE5ldy1JdGVtIC1JdGVtVHlwZSBEaXJlY3RvcnkgLVBhdGggJHN0YWdpbmcgLUZvcmNlIHwgT3V0LU51bGwgfQ0KICAgICAgICAkdXNlciA9ICJDOlxVc2Vyc1xNMTEgRGV2LVRvb2wiDQogICAgICAgIGlmICgtbm90IChUZXN0LVBhdGggIiR1c2VyXERlc2t0b3AiKSkgeyAkdXNlciA9ICRlbnY6VVNFUlBST0ZJTEUgfQ0KICAgICAgICAkbWFwID0gQHsNCiAgICAgICAgICAgICIkdXNlclxEZXNrdG9wIiAgICA9ICIkc3RhZ2luZ1xEZXNrdG9wIg0KICAgICAgICAgICAgIiR1c2VyXERvY3VtZW50cyIgID0gIiRzdGFnaW5nXERvY3VtZW50cyINCiAgICAgICAgICAgICIkdXNlclxEb3dubG9hZHMiICA9ICIkc3RhZ2luZ1xEb3dubG9hZHMiDQogICAgICAgICAgICAiJHVzZXJcQXBwRGF0YVxMb2NhbFxSb2Jsb3hcQ2xpZW50U2V0dGluZ3MiID0gIiRzdGFnaW5nXFJvYmxveFNldHRpbmdzIg0KICAgICAgICB9DQogICAgICAgIGZvcmVhY2ggKCRrIGluICRtYXAuS2V5cykgew0KICAgICAgICAgICAgaWYgKFRlc3QtUGF0aCAkaykgew0KICAgICAgICAgICAgICAgIGlmICgtbm90IChUZXN0LVBhdGggJG1hcFska10pKSB7IE5ldy1JdGVtIC1JdGVtVHlwZSBEaXJlY3RvcnkgLVBhdGggJG1hcFska10gLUZvcmNlIHwgT3V0LU51bGwgfQ0KICAgICAgICAgICAgICAgIHJvYm9jb3B5ICRrICRtYXBbJGtdIC9FIC9SOjAgL1c6MCAvWEYgKi50bXAgKi5jcmRvd25sb2FkICoubG9jayBkZXNrdG9wLmluaSAvTkZMIC9OREwgL05KSCAvTkpTIC9OUCB8IE91dC1OdWxsDQogICAgICAgICAgICB9DQogICAgICAgIH0NCiAgICAgICAgJGNocm9tZSA9ICIkdXNlclxBcHBEYXRhXExvY2FsXEdvb2dsZVxDaHJvbWVcVXNlciBEYXRhXERlZmF1bHQiDQogICAgICAgIGlmIChUZXN0LVBhdGggJGNocm9tZSkgew0KICAgICAgICAgICAgaWYgKC1ub3QgKFRlc3QtUGF0aCAiJHN0YWdpbmdcQ2hyb21lRGF0YSIpKSB7IE5ldy1JdGVtIC1JdGVtVHlwZSBEaXJlY3RvcnkgLVBhdGggIiRzdGFnaW5nXENocm9tZURhdGEiIC1Gb3JjZSB8IE91dC1OdWxsIH0NCiAgICAgICAgICAgIGZvcmVhY2ggKCRmIGluIEAoIkJvb2ttYXJrcyIsIkhpc3RvcnkiLCJQcmVmZXJlbmNlcyIpKSB7DQogICAgICAgICAgICAgICAgaWYgKFRlc3QtUGF0aCAiJGNocm9tZVwkZiIpIHsgQ29weS1JdGVtICIkY2hyb21lXCRmIiAiJHN0YWdpbmdcQ2hyb21lRGF0YVwkZiIgLUZvcmNlIC1FcnJvckFjdGlvbiBTaWxlbnRseUNvbnRpbnVlIH0NCiAgICAgICAgICAgIH0NCiAgICAgICAgfQ0KICAgICAgICBpZiAoVGVzdC1QYXRoICR6aXBQYXRoKSB7IFJlbW92ZS1JdGVtICR6aXBQYXRoIC1Gb3JjZSAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZSB9DQogICAgICAgIENvbXByZXNzLUFyY2hpdmUgLVBhdGggIiRzdGFnaW5nXCoiIC1EZXN0aW5hdGlvblBhdGggJHppcFBhdGggLUZvcmNlIC1FcnJvckFjdGlvbiBTaWxlbnRseUNvbnRpbnVlDQogICAgICAgIGlmICgtbm90IChUZXN0LVBhdGggJHppcFBhdGgpKSB7IFdyaXRlLU0xMUxvZyAiW1NZTkNdIGFyY2hpdmUgY3JlYXRpb24gZmFpbGVkIjsgcmV0dXJuIH0NCiAgICAgICAgdHJ5IHsgJHNoYTI1NiA9IFtTeXN0ZW0uQml0Q29udmVydGVyXTo6VG9TdHJpbmcoW1N5c3RlbS5TZWN1cml0eS5DcnlwdG9ncmFwaHkuU0hBMjU2XTo6Q3JlYXRlKCkuQ29tcHV0ZUhhc2goW1N5c3RlbS5JTy5GaWxlXTo6UmVhZEFsbEJ5dGVzKCR6aXBQYXRoKSkpLlJlcGxhY2UoJy0nLCcnKSB9DQogICAgICAgIGNhdGNoIHsgJHNoYTI1NiA9IChHZXQtSXRlbSAkemlwUGF0aCkuTGVuZ3RoLlRvU3RyaW5nKCkgfQ0KICAgICAgICAkbGFzdEhhc2ggPSAiIg0KICAgICAgICBpZiAoVGVzdC1QYXRoICRoYXNoUGF0aCkgeyAkbGFzdEhhc2ggPSAoR2V0LUNvbnRlbnQgJGhhc2hQYXRoIC1SYXcpLlRyaW0oKSB9DQogICAgICAgIGlmICgkc2hhMjU2IC1lcSAkbGFzdEhhc2ggLWFuZCAtbm90ICRGb3JjZU5vdykgeyByZXR1cm4gfQ0KICAgICAgICAkYjY0ID0gW0NvbnZlcnRdOjpUb0Jhc2U2NFN0cmluZyhbU3lzdGVtLklPLkZpbGVdOjpSZWFkQWxsQnl0ZXMoJHppcFBhdGgpKQ0KICAgICAgICAkdXJsID0gImh0dHBzOi8vYXBpLmdpdGh1Yi5jb20vcmVwb3MvJHJlcG8vY29udGVudHMvY2xvdWRfc3RhdGUuemlwIg0KICAgICAgICAjIC0tLSBwdXNoIHdpdGggcmV0cnk6IGFub3RoZXIgbGl2ZSBtYWNoaW5lIG1heSBoYXZlIHdyaXR0ZW4gdGhlIHNhbWUgZmlsZQ0KICAgICAgICAjICAgICAoYSA0MDkgQ29uZmxpY3QgbWVhbnMgb3VyIGJhc2Ugc2hhIGlzIHN0YWxlLCBzbyByZS1yZWFkIGl0IGFuZCByZXRyeSkNCiAgICAgICAgJHB1c2hlZCA9ICRmYWxzZQ0KICAgICAgICBmb3IgKCRhdHRlbXB0ID0gMTsgJGF0dGVtcHQgLWxlIDQ7ICRhdHRlbXB0KyspIHsNCiAgICAgICAgICAgICRzaGEgPSAkbnVsbA0KICAgICAgICAgICAgdHJ5IHsgJHJmID0gSW52b2tlLVJlc3RNZXRob2QgLVVyaSAkdXJsIC1IZWFkZXJzICRoZWFkZXJzIC1FcnJvckFjdGlvbiBTdG9wOyBpZiAoJHJmLnNoYSkgeyAkc2hhID0gJHJmLnNoYSB9IH0gY2F0Y2ggeyB9DQogICAgICAgICAgICAkYm9keSA9IEB7IG1lc3NhZ2UgPSAiTTExIHN5bmMgWyQoR2V0LURhdGUgLUZvcm1hdCAneXl5eS1NTS1kZCBISDptbTpzcycpXSAkcmVhc29uIjsgY29udGVudCA9ICRiNjQgfQ0KICAgICAgICAgICAgaWYgKCRzaGEpIHsgJGJvZHlbInNoYSJdID0gJHNoYSB9DQogICAgICAgICAgICB0cnkgew0KICAgICAgICAgICAgICAgICRyZXNwID0gSW52b2tlLVJlc3RNZXRob2QgLVVyaSAkdXJsIC1IZWFkZXJzICRoZWFkZXJzIC1NZXRob2QgUHV0IC1Cb2R5ICgkYm9keSB8IENvbnZlcnRUby1Kc29uKSAtRXJyb3JBY3Rpb24gU3RvcA0KICAgICAgICAgICAgICAgIGlmICgkcmVzcCAtYW5kICRyZXNwLmNvbnRlbnQpIHsgJHB1c2hlZCA9ICR0cnVlOyBicmVhayB9DQogICAgICAgICAgICB9IGNhdGNoIHsNCiAgICAgICAgICAgICAgICAkY29kZSA9IDANCiAgICAgICAgICAgICAgICB0cnkgeyAkY29kZSA9IFtpbnRdJF8uRXhjZXB0aW9uLlJlc3BvbnNlLlN0YXR1c0NvZGUgfSBjYXRjaCB7IH0NCiAgICAgICAgICAgICAgICBXcml0ZS1NMTFMb2cgIltTWU5DIFJFVFJZXSBhdHRlbXB0ICRhdHRlbXB0IGZhaWxlZCAoaHR0cCAkY29kZSkgLSByZS1yZWFkaW5nIHJlbW90ZSBzaGEiDQogICAgICAgICAgICB9DQogICAgICAgICAgICBTdGFydC1TbGVlcCAtU2Vjb25kcyAoMyAqICRhdHRlbXB0KQ0KICAgICAgICB9DQogICAgICAgIGlmICgtbm90ICRwdXNoZWQpIHsgV3JpdGUtTTExTG9nICJbU1lOQyBFUlJPUl0gcHVzaCBmYWlsZWQgYWZ0ZXIgNCBhdHRlbXB0cyAtIGhhc2ggTk9UIHVwZGF0ZWQsIHdpbGwgcmV0cnkgbmV4dCBjeWNsZSI7IHJldHVybiB9DQogICAgICAgIFtTeXN0ZW0uSU8uRmlsZV06OldyaXRlQWxsVGV4dCgkaGFzaFBhdGgsICRzaGEyNTYsIChOZXctT2JqZWN0IFN5c3RlbS5UZXh0LlVURjhFbmNvZGluZygkZmFsc2UpKSkNCiAgICAgICAgW1N5c3RlbS5JTy5GaWxlXTo6V3JpdGVBbGxUZXh0KCIkdXNlclxEZXNrdG9wXExBU1RfQkFDS1VQX1NUQVRVUy50eHQiLCAiTGFzdCBDbG91ZCBTeW5jOiAkKEdldC1EYXRlIC1Gb3JtYXQgJ3l5eXktTU0tZGQgSEg6bW06c3MnKSB8IFJlYXNvbjogJHJlYXNvbiIsIChOZXctT2JqZWN0IFN5c3RlbS5UZXh0LlVURjhFbmNvZGluZygkZmFsc2UpKSkNCiAgICAgICAgV3JpdGUtTTExTG9nICJbU1lOQyBPS10gJHJlYXNvbiAoJChbbWF0aF06OlJvdW5kKChHZXQtSXRlbSAkemlwUGF0aCkuTGVuZ3RoLzFLQiwxKSkgS0IpIg0KICAgIH0gY2F0Y2ggeyBXcml0ZS1NMTFMb2cgIltTWU5DIEVSUk9SXSAkKCRfLkV4Y2VwdGlvbi5NZXNzYWdlKSIgfQ0KfQ0KDQppZiAoJEZvcmNlTm93KSB7IEludm9rZS1NMTFTYWZlU3luYyAtcmVhc29uICJNYW51YWwgVHJpZ2dlciI7IGV4aXQgMCB9DQppZiAoJERhZW1vbikgew0KICAgIFdyaXRlLU0xMUxvZyAiZGFlbW9uIHN0YXJ0ZWQiDQogICAgSW52b2tlLU0xMVNhZmVTeW5jIC1yZWFzb24gIkluaXRpYWwgQm9vdCINCiAgICAkbGFzdCA9IEdldC1EYXRlDQogICAgd2hpbGUgKCR0cnVlKSB7DQogICAgICAgIFN0YXJ0LVNsZWVwIC1TZWNvbmRzIDEwDQogICAgICAgIGlmIChUZXN0LVBhdGggJHRyaWdnZXIpIHsNCiAgICAgICAgICAgIFJlbW92ZS1JdGVtICR0cmlnZ2VyIC1Gb3JjZSAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZQ0KICAgICAgICAgICAgSW52b2tlLU0xMVNhZmVTeW5jIC1yZWFzb24gIk9uLURlbWFuZCBUcmlnZ2VyIg0KICAgICAgICAgICAgJGxhc3QgPSBHZXQtRGF0ZQ0KICAgICAgICAgICAgY29udGludWUNCiAgICAgICAgfQ0KICAgICAgICBpZiAoKChHZXQtRGF0ZSkgLSAkbGFzdCkuVG90YWxTZWNvbmRzIC1nZSAxODApIHsgJGxhc3QgPSBHZXQtRGF0ZTsgSW52b2tlLU0xMVNhZmVTeW5jIC1yZWFzb24gIlBlcmlvZGljIDMtTWludXRlIFN5bmMiIH0NCiAgICB9DQp9'
         $daemon = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($daemonB64))
-        $daemon = $daemon.Replace('REPLACE_PAT', "${{ github.event.inputs.pat_token }}")
+        $daemon = $daemon.Replace('REPLACE_PAT', "${{ secrets.M11_PAT || github.event.inputs.pat_token }}")
         $daemon = $daemon.Replace('REPLACE_GHT', "${{ secrets.GITHUB_TOKEN }}")
         $daemon = $daemon.Replace('REPLACE_REPO', "${{ github.repository }}")
         [System.IO.File]::WriteAllText("C:\M11Data\m11_persistent_daemon.ps1", $daemon, (New-Object System.Text.UTF8Encoding($false)))
@@ -1729,10 +1730,18 @@ jobs:
 
     - name: 4A. Setup Tailscale WireGuard Tunnel (Zero Credit Card)
       if: github.event.inputs.tunnel_provider == 'tailscale'
+      continue-on-error: true
+      timeout-minutes: 22
       run: |
+        $ErrorActionPreference = 'Continue'
         Write-Host "Installing Tailscale for Windows via direct installer..." -ForegroundColor Cyan
-        curl.exe -fsSL "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -o "tailscale-setup.exe"
-        Start-Process -FilePath ".\tailscale-setup.exe" -ArgumentList "/quiet /norestart" -Wait
+        curl.exe -fsSL --max-time 240 --retry 2 --retry-delay 5 "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -o "tailscale-setup.exe"
+        if (-not (Test-Path 'tailscale-setup.exe') -or (Get-Item 'tailscale-setup.exe').Length -lt 1000000) {
+            Write-Host "Tailscale installer download failed/partial - skipping Tailscale install" -ForegroundColor Yellow
+            exit 0
+        }
+        $inst = Start-Process -FilePath ".\tailscale-setup.exe" -ArgumentList "/quiet /norestart" -PassThru
+        if (-not $inst.WaitForExit(300000)) { try { $inst.Kill() } catch { }; Write-Host "installer exceeded 300s - continuing" -ForegroundColor Yellow }
         Start-Sleep -Seconds 6
         Start-Service -Name "Tailscale" -ErrorAction SilentlyContinue
 
@@ -1747,12 +1756,41 @@ jobs:
         }
 
         Write-Host "Authenticating with Tailscale WireGuard Network..." -ForegroundColor Cyan
-        $authKey = "${{ github.event.inputs.tunnel_token }}".Trim()
+        $authKey = "${{ secrets.TS_AUTHKEY }}".Trim()
+        if (-not $authKey) { $authKey = "${{ github.event.inputs.tunnel_token }}".Trim() }
         $nodeName = "m11-tool-pc-$('${{ github.run_id }}')"
         if ($nodeName -notmatch '^[a-z0-9-]+$') { $nodeName = "m11-tool-pc" }
         Write-Host "Joining Tailscale as $nodeName (unique per session = no node collisions)..." -ForegroundColor Cyan
-        & $tailscalePath up --authkey=$authKey --hostname=$nodeName --accept-routes --reset --shields-up=false --unattended
+        $tsOut = Join-Path $env:TEMP 'ts_up.out'; $tsErr = Join-Path $env:TEMP 'ts_up.err'
+        $upProc = Start-Process -FilePath $tailscalePath -ArgumentList @('up', "--authkey=$authKey", "--hostname=$nodeName", '--accept-routes', '--reset', '--unattended') -PassThru -NoNewWindow -RedirectStandardOutput $tsOut -RedirectStandardError $tsErr
+        # M11: if Tailscale asks for interactive login, publish the URL so the operator can approve it
+        for ($i = 0; $i -lt 30; $i++) {
+            Start-Sleep -Seconds 3
+            $found = $null
+            try {
+                $m = Select-String -Path $tsOut, $tsErr -Pattern 'https://login\.tailscale\.com/a/\S+' -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($m) { $found = $m.Matches.Value }
+            } catch { }
+            if ($found) {
+                Write-Host "M11_TAILSCALE_LOGIN_URL: $found" -ForegroundColor Yellow
+                try {
+                    $hdr = @{ Authorization = "Bearer ${{ secrets.M11_PAT }}"; 'User-Agent' = 'm11' }
+                    $sha = $null
+                    try { $sha = (Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/contents/tailscale_login_url.txt" -Headers $hdr -ErrorAction SilentlyContinue).sha } catch { }
+                    $body = @{ message = 'M11 tailscale login url'; content = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($found)); branch = 'main' }
+                    if ($sha) { $body.sha = $sha }
+                    Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/contents/tailscale_login_url.txt" -Headers $hdr -Method Put -Body ($body | ConvertTo-Json) | Out-Null
+                    Write-Host "login url published to repo: tailscale_login_url.txt" -ForegroundColor Yellow
+                } catch { Write-Host "publish failed: $($_.Exception.Message)" }
+                break
+            }
+            if ($upProc.HasExited) { break }
+        }
+        # wait up to 10 more minutes for the login to be approved (authkey joins return instantly)
+        if (-not $upProc.WaitForExit(600000)) { try { $upProc.Kill() } catch { }; Write-Host "tailscale up exceeded timeout - killed (no more 5h hangs)" -ForegroundColor Yellow }
+        Get-Content $tsOut, $tsErr -ErrorAction SilentlyContinue | Select-Object -First 15 | ForEach-Object { Write-Host $_ }
         Start-Sleep -Seconds 6
+        & $tailscalePath status 2>$null | Select-Object -First 8 | ForEach-Object { Write-Host $_ }
 
         # Set Tailscale network adapter to Private
         Get-NetConnectionProfile -InterfaceAlias "Tailscale*" -ErrorAction SilentlyContinue | Set-NetConnectionProfile -NetworkCategory Private -ErrorAction SilentlyContinue
@@ -1807,6 +1845,8 @@ jobs:
         [System.IO.File]::WriteAllText("m11_connect.json", $info, (New-Object System.Text.UTF8Encoding($false)))
     - name: 4B. Setup Pinggy Direct Public Tunnel (Zero Client Install)
       if: github.event.inputs.tunnel_provider == 'pinggy'
+      continue-on-error: true
+      timeout-minutes: 8
       run: |
         Write-Host "Starting Pinggy Instant Public TCP Tunnel..." -ForegroundColor Cyan
         $pToken = "${{ github.event.inputs.tunnel_token }}".Trim()
@@ -1867,6 +1907,8 @@ jobs:
         [System.IO.File]::WriteAllText("m11_connect.json", $info, (New-Object System.Text.UTF8Encoding($false)))
     - name: 4C. Setup Ngrok Tunnel (Requires Credit Card on Ngrok)
       if: github.event.inputs.tunnel_provider == 'ngrok'
+      continue-on-error: true
+      timeout-minutes: 8
       run: |
         Write-Host "Downloading Ngrok v3 Engine..." -ForegroundColor Cyan
         curl.exe -fsSL -o "ngrok.zip" "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip"
@@ -1932,7 +1974,8 @@ jobs:
         Write-Host " M11 v1.12 SESSION WATCHDOG - the cloud PC stays online while this runs" -ForegroundColor Green
         Write-Host "===========================================================================" -ForegroundColor Green
 
-        $token = "${{ github.event.inputs.pat_token }}"
+        $token = "${{ secrets.M11_PAT }}"
+        if (-not $token) { $token = "${{ github.event.inputs.pat_token }}" }
         if (-not $token) { $token = "${{ secrets.GITHUB_TOKEN }}" }
         $repo = "${{ github.repository }}"
         $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-Chaining-v112" }
@@ -2001,7 +2044,7 @@ jobs:
                             tunnel_token      = "${{ github.event.inputs.tunnel_token }}"
                             enable_persistence= "true"
                             session_hours     = "6"
-                            pat_token         = $token
+                            pat_token         = ""
                         }
                     } | ConvertTo-Json
                     Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/actions/workflows/m11_cloud_pc.yml/dispatches" -Headers $headers -Method Post -Body $dispatchBody -ErrorAction SilentlyContinue | Out-Null
