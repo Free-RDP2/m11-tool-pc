@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion
 chcp 65001 >nul 2>&1
-title M11 SELF TEST - Toolkit Verification (v1.12)
+title M11 SELF TEST - Toolkit Verification (v1.14)
 color 0e
 
 set "HERE=%~dp0"
@@ -10,7 +10,7 @@ if not exist "%USERPROFILE%\Desktop" set "REPORT=C:\M11Data\M11_SELF_TEST_REPORT
 set "PASS=0"
 set "FAIL=0"
 
-echo M11 SELF TEST REPORT (v1.12) > "%REPORT%"
+echo M11 SELF TEST REPORT (v1.14) > "%REPORT%"
 echo Generated: %DATE% %TIME% >> "%REPORT%"
 echo ============================================================ >> "%REPORT%"
 
@@ -24,7 +24,9 @@ if errorlevel 1 ( call :bad "Administrator rights" ) else ( call :ok "Administra
 netstat -ano | findstr /r /c:":3389 .*LISTENING" >nul 2>&1
 if errorlevel 1 ( call :bad "RDP port 3389 listening" ) else ( call :ok "RDP port 3389 listening" )
 
-if exist "C:\Program Files\Tailscale\tailscale.exe" ( call :ok "Tailscale installed" ) else ( call :bad "Tailscale installed" )
+if "%M11_SKIP_TAILSCALE%"=="1" call :ok "Tailscale installed (deferred to step 4A)"
+if not "%M11_SKIP_TAILSCALE%"=="1" if exist "C:\Program Files\Tailscale\tailscale.exe" call :ok "Tailscale installed"
+if not "%M11_SKIP_TAILSCALE%"=="1" if not exist "C:\Program Files\Tailscale\tailscale.exe" call :bad "Tailscale installed"
 
 sc query Audiosrv | findstr /i RUNNING >nul 2>&1
 if errorlevel 1 ( call :bad "Audio service running" ) else ( call :ok "Audio service running" )
