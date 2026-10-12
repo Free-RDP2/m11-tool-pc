@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion
 chcp 65001 >nul 2>&1
-title M11 UNIVERSAL STORE - Games & Apps Hub (v1.12)
+title M11 UNIVERSAL STORE - Games ^& Apps Hub (v1.12)
 color 0b
 cd /d "%~dp0"
 
