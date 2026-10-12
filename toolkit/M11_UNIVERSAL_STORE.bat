@@ -1,4 +1,12 @@
 @echo off
+rem =====================================================================
+rem  M11 self-elevation guard (v1.14) - engines need admin rights
+rem =====================================================================
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -ArgumentList '%*' -Verb RunAs" >nul 2>&1
+    exit /b
+)
 setlocal EnableDelayedExpansion
 chcp 65001 >nul 2>&1
 title M11 UNIVERSAL STORE - Games ^& Apps Hub (v1.12)
