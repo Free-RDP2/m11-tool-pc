@@ -90,7 +90,7 @@ echo --- MOJIBAKE / INTEGRITY SCAN ---
 if exist "%HERE%_M11_MOJI_CHECK.ps1" (
   powershell -NoProfile -ExecutionPolicy Bypass -File "%HERE%_M11_MOJI_CHECK.ps1" 2>&1 | findstr /v "^$"
 ) else (
-  echo   ^(checker not found - skipping^)
+  echo   (checker not found - skipping)
 )
 
 echo.
@@ -105,7 +105,7 @@ echo  Full report: %REPORT%
 echo ============================================================
 echo RESULT: %PASS% passed, %FAIL% failed >> "%REPORT%"
 if /i "%~1"=="nopause" exit /b 0
-echo ^(press any key to close^)
+echo (press any key to close)
 pause >nul
 exit /b 0
 
