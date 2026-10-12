@@ -4,7 +4,7 @@
 # ============================================================
 $bad = 0
 $dirs = @('C:\Users\M11 Dev-Tool\Desktop', 'C:\Users\runneradmin\Desktop', 'C:\Users\Public\Desktop') |
-        Where-Object { Test-Path $_ }
+        Where-Object { Test-Path $_ -ErrorAction SilentlyContinue }
 
 foreach ($d in $dirs) {
     Get-ChildItem $d -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
@@ -13,7 +13,8 @@ foreach ($d in $dirs) {
             Write-Host ('  BAD NAME: ' + $_.FullName)
         }
         elseif (-not $_.PSIsContainer -and $_.Length -lt 300000 -and $_.Extension -match '\.(bat|cmd|ps1|txt|json)$') {
-            $t = [IO.File]::ReadAllText($_.FullName)
+            $t = ''
+            try { $t = [IO.File]::ReadAllText($_.FullName) } catch { $t = '' }
             if ($t -match '\?\?\?\?\?') {
                 $bad++
                 Write-Host ('  BAD CONTENT: ' + $_.FullName)
