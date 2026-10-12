@@ -32,8 +32,17 @@ echo   [S] Verify the toolkit ^(self test^)
 echo   [0] Exit
 echo ==============================================================================
 set "opt="
+rem --- optional command line argument: M11 script 0|1|2... runs that entry directly ---
+if not "%~1"=="" set "opt=%~1"
+if defined opt goto dispatch
 set /p opt="Choice: "
-if not defined opt goto main_menu
+if not defined opt (
+    echo.
+    echo [!] No input available ^(non-interactive session^) - closing.
+    timeout /t 2 >nul
+    exit /b 9
+)
+:dispatch
 
 if /i "%opt%"=="1" goto open_toolkit
 if /i "%opt%"=="2" goto net
