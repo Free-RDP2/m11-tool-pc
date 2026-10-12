@@ -1097,48 +1097,53 @@ jobs:
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" /v Enabled /t REG_DWORD /d 0 /f >nul 2>&1
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\CredentialGuard" /v Enabled /t REG_DWORD /d 0 /f >nul 2>&1
         bcdedit /set hypervisorlaunchtype off >nul 2>&1
-        echo       mitigations applied (memory integrity off, Hyper-V guest off, hypervisorlaunchtype=off) >> "%RPT%"
+        echo       mitigations applied - memory integrity off - Hyper-V guest off - hypervisorlaunchtype=off >> "%RPT%"
         echo       NOTE: a reboot is required for these to take effect. >> "%RPT%"
         
-        echo [9/9] Launch test - Player (25 s) then Studio (45 s)...
+        echo [9/9] Launch test - Player 25 s then Studio 45 s...
         set "PVM=unknown"
-        if defined PLAYER (
-            echo       testing player: !PLAYER! >> "%RPT%"
-            start "" "!PLAYER!"
-            ping -n 26 127.0.0.1 >nul
-            tasklist /fi "imagename eq RobloxPlayerBeta.exe" | find /i "RobloxPlayerBeta.exe" >nul 2>&1
-            if !errorlevel! EQU 0 (
-                tasklist /fi "imagename eq RobloxPlayerBeta.exe" >> "%RPT%" 2>&1
-                echo       [PASS] RobloxPlayerBeta.exe is RUNNING >> "%RPT%"
-                echo [PASS] Player runs on this machine.
-                taskkill /f /im RobloxPlayerBeta.exe >nul 2>&1
-                set "PVM=working"
-            ) else (
-                echo       [INFO] Player did not stay open - the expected result on a virtual >> "%RPT%"
-                echo       [INFO] machine (Roblox anti-cheat Hyperion blocks VMs by design). >> "%RPT%"
-                echo [INFO] Player blocked (virtual machine) - Studio still works.
-                set "PVM=blocked"
-            )
-            set "PLOG=%LOCALAPPDATA%\Roblox\logs"
-            for /f "delims=" %%L in ('dir /b /o-d "!PLOG!\*RobloxPlayer*.log" 2^>nul') do if not defined NEWESTLOG set "NEWESTLOG=%%L"
-            if defined NEWESTLOG (
-                echo       newest player log: !NEWESTLOG! >> "%RPT%"
-                findstr /i /c:"virtual machine" "!PLOG!\!NEWESTLOG!" >nul 2>&1 && echo       [EVIDENCE] player log says: virtual machine detected >> "%RPT%"
-            )
-        ) else ( echo       [WARN] player not installed >> "%RPT%" )
-        if defined STUDIO (
-            echo       testing studio: !STUDIO! >> "%RPT%"
-            start "" "!STUDIO!"
-            ping -n 46 127.0.0.1 >nul
-            tasklist /fi "imagename eq RobloxStudioBeta.exe" | find /i "RobloxStudioBeta.exe" >nul 2>&1
-            if !errorlevel! EQU 0 (
-                tasklist /fi "imagename eq RobloxStudioBeta.exe" >> "%RPT%" 2>&1
-                echo       [PASS] RobloxStudioBeta.exe is RUNNING >> "%RPT%"
-                echo [PASS] Studio runs on this machine - build and test games from here.
-            ) else (
-                echo       [INFO] Studio did not stay open yet (first run can take a while). >> "%RPT%"
-            )
-        ) else ( echo       [WARN] studio not installed >> "%RPT%" )
+        if not defined PLAYER goto :RPT_NOPLAYER
+        echo       testing player: !PLAYER! >> "%RPT%"
+        start "" "!PLAYER!"
+        ping -n 26 127.0.0.1 >nul
+        tasklist /fi "imagename eq RobloxPlayerBeta.exe" | find /i "RobloxPlayerBeta.exe" >nul 2>&1
+        if errorlevel 1 goto :RPT_PLAYER_DEAD
+        tasklist /fi "imagename eq RobloxPlayerBeta.exe" >> "%RPT%" 2>&1
+        echo       [PASS] RobloxPlayerBeta.exe is RUNNING >> "%RPT%"
+        echo [PASS] Player runs on this machine.
+        taskkill /f /im RobloxPlayerBeta.exe >nul 2>&1
+        set "PVM=working"
+        goto :RPT_PLAYER_DONE
+        :RPT_PLAYER_DEAD
+        echo       [INFO] Player did not stay open - the expected result on a virtual machine. >> "%RPT%"
+        echo       [INFO] Roblox anti-cheat Hyperion blocks virtual machines by design. >> "%RPT%"
+        set "PVM=blocked"
+        :RPT_PLAYER_DONE
+        set "PLOG=%LOCALAPPDATA%\Roblox\logs"
+        set "NEWESTLOG="
+        for /f "delims=" %%L in ('dir /b /o-d "!PLOG!\*RobloxPlayer*.log" 2^>nul') do if not defined NEWESTLOG set "NEWESTLOG=%%L"
+        if defined NEWESTLOG echo       newest player log: !NEWESTLOG! >> "%RPT%"
+        if defined NEWESTLOG findstr /i /c:"virtual machine" "!PLOG!\!NEWESTLOG!" >nul 2>&1 && echo       [EVIDENCE] player log mentions: virtual machine >> "%RPT%"
+        goto :RPT_STUDIO
+        :RPT_NOPLAYER
+        echo       [WARN] player not installed >> "%RPT%"
+        :RPT_STUDIO
+        if not defined STUDIO goto :RPT_NOSTUDIO
+        echo       testing studio: !STUDIO! >> "%RPT%"
+        start "" "!STUDIO!"
+        ping -n 46 127.0.0.1 >nul
+        tasklist /fi "imagename eq RobloxStudioBeta.exe" | find /i "RobloxStudioBeta.exe" >nul 2>&1
+        if errorlevel 1 goto :RPT_STUDIO_DEAD
+        tasklist /fi "imagename eq RobloxStudioBeta.exe" >> "%RPT%" 2>&1
+        echo       [PASS] RobloxStudioBeta.exe is RUNNING >> "%RPT%"
+        echo [PASS] Studio runs on this machine - build and test games from here.
+        goto :RPT_DONE
+        :RPT_STUDIO_DEAD
+        echo       [INFO] Studio did not stay open yet - the first run can take a while. >> "%RPT%"
+        goto :RPT_DONE
+        :RPT_NOSTUDIO
+        echo       [WARN] studio not installed >> "%RPT%"
+        :RPT_DONE
         
         echo.
         echo ==============================================================================
