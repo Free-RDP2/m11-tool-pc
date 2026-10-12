@@ -22,23 +22,26 @@ for %%U in ("M11 Dev-Tool" "runneradmin" "Admin" "Administrator") do (
         set "WEXE=C:\Users\%%~U\AppData\Local\Microsoft\WindowsApps\winget.exe"
         set "M11_WINGET=!WEXE!"
         set "PATH=!PATH!;C:\Users\%%~U\AppData\Local\Microsoft\WindowsApps"
-        endlocal & set "M11_WINGET=!WEXE!" & set "PATH=%PATH%;C:\Users\%%~U\AppData\Local\Microsoft\WindowsApps" & exit /b 0
+        set "M11_WINGET=!WEXE!"
+        endlocal & set "M11_WINGET=%M11_WINGET%" & set "PATH=%PATH%;C:\Users\%%~U\AppData\Local\Microsoft\WindowsApps" & exit /b 0
     )
 )
 
 rem --- 3) PowerShell search (AppX package locations) -----------
 set "WEXE="
-for /f "usebackq delims=" %%P in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0_M11_WINGET_FIND.ps1" 2^>nul`) do set "WEXE=%%P"
+for /f "usebackq delims=" %%P in (`powershell -NoProfile -InputFormat None -ExecutionPolicy Bypass -File "%~dp0_M11_WINGET_FIND.ps1" 2^>nul ^<nul`) do set "WEXE=%%P"
 if defined WEXE if exist "!WEXE!" (
     set "PATH=!PATH!;%~dp0"
-    endlocal & set "M11_WINGET=!WEXE!" & exit /b 0
+    set "M11_WINGET=!WEXE!"
+    endlocal & set "M11_WINGET=%M11_WINGET%" & exit /b 0
 )
 
 rem --- 4) last resort: bootstrap App Installer -----------------
 set "BEXE="
-for /f "usebackq delims=" %%P in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0_M11_WINGET_BOOTSTRAP.ps1" 2^>nul`) do set "BEXE=%%P"
+for /f "usebackq delims=" %%P in (`powershell -NoProfile -InputFormat None -ExecutionPolicy Bypass -File "%~dp0_M11_WINGET_BOOTSTRAP.ps1" 2^>nul ^<nul`) do set "BEXE=%%P"
 if defined BEXE if exist "!BEXE!" (
-    endlocal & set "M11_WINGET=!BEXE!" & exit /b 0
+    set "M11_WINGET=!BEXE!"
+    endlocal & set "M11_WINGET=%M11_WINGET%" & exit /b 0
 )
 
 endlocal & set "M11_WINGET=winget" & exit /b 1
