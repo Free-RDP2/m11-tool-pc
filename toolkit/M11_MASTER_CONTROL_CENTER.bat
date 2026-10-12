@@ -57,9 +57,12 @@ if not defined TOOL_DIR (
     pause
     goto main_menu
 )
-set "RUNNER=%TOOL_DIR%\M11_MASTER_RUNNER.bat"
-if not exist "%RUNNER%" set "RUNNER=%TOOL_DIR%\_MASTER_RUNNER.bat"
-if not exist "%RUNNER%" (
+rem --- find the runner whatever its prefix is (emoji/ASCII/underscore) ---
+set "RUNNER="
+for %%R in ("%TOOL_DIR%\*MASTER_RUNNER*.bat") do set "RUNNER=%%~fR"
+if not defined RUNNER for %%R in ("%~dp0*MASTER_RUNNER*.bat") do set "RUNNER=%%~fR"
+if not defined RUNNER for /d %%D in ("%TOOL_DIR%\*Engines_And_Scripts*") do for %%R in ("%%~fD\*MASTER_RUNNER*.bat") do set "RUNNER=%%~fR"
+if not defined RUNNER (
     echo [!] Runner not found inside "%TOOL_DIR%".
     dir /b "%TOOL_DIR%"
     pause
@@ -117,9 +120,14 @@ goto main_menu
 :engine
 rem %~1 = engine file name ; searches toolkit then engines folder
 set "TARGET="
+set "ENG_DIR="
+if defined TOOL_DIR for /d %%D in ("%TOOL_DIR%\*Engines_And_Scripts*") do set "ENG_DIR=%%~fD"
 if defined TOOL_DIR if exist "%TOOL_DIR%\%~1" set "TARGET=%TOOL_DIR%\%~1"
+if not defined TARGET if defined ENG_DIR if exist "%ENG_DIR%\%~1" set "TARGET=%ENG_DIR%\%~1"
 if not defined TARGET if defined TOOL_DIR if exist "%TOOL_DIR%\_Engines_And_Scripts\%~1" set "TARGET=%TOOL_DIR%\_Engines_And_Scripts\%~1"
 if not defined TARGET if exist "%~dp0%~1" set "TARGET=%~dp0%~1"
+if not defined TARGET for /d %%D in ("%~dp0*Engines_And_Scripts*") do if exist "%%~fD\%~1" set "TARGET=%%~fD\%~1"
+if not defined TARGET if exist "%~dp0..\%~1" set "TARGET=%~dp0..\%~1"
 if not defined TARGET (
     echo [!] Engine not found: %~1
     echo     Run the Self Test [S] to verify the installation.
