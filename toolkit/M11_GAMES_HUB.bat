@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion
 chcp 65001 >nul 2>&1
-title M11 GAMES HUB - Official Launchers & Free Games (v1.12)
+title M11 GAMES HUB - Official Launchers ^& Free Games (v1.12)
 color 0c
 cd /d "%~dp0"
 
