@@ -300,58 +300,131 @@ jobs:
     - name: 3. Restore User Persistent State & Desktop Files
       if: github.event.inputs.enable_persistence == 'true'
       run: |
-        Write-Host "Checking for existing cloud backup (Persistent State)..." -ForegroundColor Cyan
-        try {
-          $token = "${{ github.event.inputs.pat_token }}"
-          if (-not $token) { $token = "${{ secrets.GITHUB_TOKEN }}" }
-          $repo = "${{ github.repository }}"
-          $url = "https://api.github.com/repos/$repo/contents/cloud_state.zip?ref=main"
-          $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-Sync-v111" }
-          $fileMeta = Invoke-RestMethod -Uri $url -Headers $headers -ErrorAction SilentlyContinue
-
-          if ($fileMeta -and $fileMeta.download_url) {
-            Write-Host "Found cloud state backup! Restoring user files to M11 Dev-Tool..." -ForegroundColor Green
-            curl.exe -fsSL -o "cloud_state.zip" $fileMeta.download_url
-
-            # Ensure target directories exist for M11 Dev-Tool
-            $m11Dirs = @(
-              "C:\Users\M11 Dev-Tool\Desktop",
-              "C:\Users\M11 Dev-Tool\Documents",
-              "C:\Users\M11 Dev-Tool\Downloads",
-              "C:\Users\M11 Dev-Tool\AppData\Local\Roblox\ClientSettings"
-            )
-            foreach ($d in $m11Dirs) {
-              if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force -ErrorAction SilentlyContinue | Out-Null }
-            }
-
-            # Extract and restore to M11 Dev-Tool (Active RDP User)
-            $stagingRestore = "C:\M11Data\staging_restore"
-            if (Test-Path $stagingRestore) { Remove-Item $stagingRestore -Recurse -Force -ErrorAction SilentlyContinue }
-            Expand-Archive -Path "cloud_state.zip" -DestinationPath $stagingRestore -Force -ErrorAction SilentlyContinue
-
-            if (Test-Path "$stagingRestore\Desktop") { robocopy "$stagingRestore\Desktop" "C:\Users\M11 Dev-Tool\Desktop" /E /R:1 /W:1 | Out-Null }
-            if (Test-Path "$stagingRestore\Documents") { robocopy "$stagingRestore\Documents" "C:\Users\M11 Dev-Tool\Documents" /E /R:1 /W:1 | Out-Null }
-            if (Test-Path "$stagingRestore\Downloads") { robocopy "$stagingRestore\Downloads" "C:\Users\M11 Dev-Tool\Downloads" /E /R:1 /W:1 | Out-Null }
-            if (Test-Path "$stagingRestore\RobloxSettings") { robocopy "$stagingRestore\RobloxSettings" "C:\Users\M11 Dev-Tool\AppData\Local\Roblox\ClientSettings" /E /R:1 /W:1 | Out-Null }
-            if (Test-Path "$stagingRestore\ChromeData") {
-                $chromeDst = "C:\Users\M11 Dev-Tool\AppData\Local\Google\Chrome\User Data\Default"
-                if (-not (Test-Path $chromeDst)) { New-Item -ItemType Directory -Path $chromeDst -Force | Out-Null }
-                robocopy "$stagingRestore\ChromeData" $chromeDst /E /R:1 /W:1 | Out-Null
-            }
-
-            # Direct fallback extraction for legacy backups
-            Expand-Archive -Path "cloud_state.zip" -DestinationPath "C:\Users\M11 Dev-Tool" -Force -ErrorAction SilentlyContinue
-            Expand-Archive -Path "cloud_state.zip" -DestinationPath "C:\Users\runneradmin" -Force -ErrorAction SilentlyContinue
-
-            # Grant full ownership and permissions to M11 Dev-Tool
-            icacls "C:\Users\M11 Dev-Tool" /grant "M11 Dev-Tool:(OI)(CI)F" /t /q 2>$null | Out-Null
-            Write-Host "User files, desktop items, and game state restored 100%!" -ForegroundColor Green
-          } else {
-            Write-Host "No prior cloud backup found. Initializing fresh clean workspace." -ForegroundColor Yellow
-          }
-        } catch {
-          Write-Host "State initialization completed."
+        Write-Host ">>> M11 v1.12 STATE RESTORE (structured) <<<" -ForegroundColor Cyan
+        $profiles = @()
+        foreach ($p in (Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue)) {
+            if (Test-Path (Join-Path $p.FullName 'Desktop')) { $profiles += $p.FullName }
         }
+        if (-not ($profiles -contains 'C:\Users\M11 Dev-Tool')) { $profiles += 'C:\Users\M11 Dev-Tool' }
+        Write-Host ("Profiles targeted: " + ($profiles -join ', '))
+
+        $token = "${{ github.event.inputs.pat_token }}"
+        if (-not $token) { $token = "${{ secrets.GITHUB_TOKEN }}" }
+        $repo = "${{ github.repository }}"
+        $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-Sync-v112" }
+
+        $zip = "C:\M11Data\cloud_state.zip"
+        New-Item -ItemType Directory -Path "C:\M11Data" -Force -ErrorAction SilentlyContinue | Out-Null
+        $got = $false
+        try {
+            $url = "https://api.github.com/repos/$repo/contents/cloud_state.zip?ref=main"
+            $meta = Invoke-RestMethod -Uri $url -Headers $headers -ErrorAction SilentlyContinue
+            if ($meta -and $meta.download_url) {
+                curl.exe -fsSL -o $zip $meta.download_url
+                if ((Test-Path $zip) -and (Get-Item $zip).Length -gt 0) { $got = $true; Write-Host "Backup downloaded from repository." -ForegroundColor Green }
+            }
+        } catch { Write-Host ("Repository fetch notice: " + $_.Exception.Message) -ForegroundColor Yellow }
+
+        if (-not $got) {
+            Write-Host "No cloud_state.zip found. A fresh workspace will be created." -ForegroundColor Yellow
+        } else {
+            $stg = "C:\M11Data\staging_restore"
+            if (Test-Path $stg) { Remove-Item $stg -Recurse -Force -ErrorAction SilentlyContinue }
+            New-Item -ItemType Directory -Path $stg -Force | Out-Null
+            try { Expand-Archive -Path $zip -DestinationPath $stg -Force -ErrorAction Stop }
+            catch { Write-Host ("Extract warning: " + $_.Exception.Message) -ForegroundColor Yellow }
+
+            foreach ($prof in $profiles) {
+                # remove ONLY M11-managed toolkit items, never user data
+                foreach ($rel in @('Desktop','Documents','Downloads')) {
+                    $dst = Join-Path $prof $rel
+                    if (-not (Test-Path $dst)) { New-Item -ItemType Directory -Path $dst -Force | Out-Null }
+                }
+                $dsk = Join-Path $prof 'Desktop'
+                Get-ChildItem -LiteralPath $dsk -Force -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -match '^(\?+|M11|_M11|.*M11_TOOL_PC|.*MASTER_RUNNER|.*M11_MASTER|.*M11_UNIVERSAL_STORE|.*DOWNLOAD_GTA_V)' } |
+                    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+
+                foreach ($rel in @('Desktop','Documents','Downloads')) {
+                    $src = Join-Path $stg $rel
+                    $dst = Join-Path $prof $rel
+                    if (Test-Path $src) { robocopy $src $dst /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null }
+                }
+                $robSrc = Join-Path $stg 'RobloxSettings'
+                if (Test-Path $robSrc) {
+                    $robDst = Join-Path $prof 'AppData\Local\Roblox\ClientSettings'
+                    if (-not (Test-Path $robDst)) { New-Item -ItemType Directory -Path $robDst -Force | Out-Null }
+                    robocopy $robSrc $robDst /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+                }
+                $chrSrc = Join-Path $stg 'ChromeData'
+                if (Test-Path $chrSrc) {
+                    $chrDst = Join-Path $prof 'AppData\Local\Google\Chrome\User Data\Default'
+                    if (-not (Test-Path $chrDst)) { New-Item -ItemType Directory -Path $chrDst -Force | Out-Null }
+                    robocopy $chrSrc $chrDst /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+                }
+                cmd.exe /c "icacls `"$prof`" /grant `"$($prof.Split('\')[-1]):(OI)(CI)F`" /t /q" 2>$null | Out-Null
+                Write-Host ("Restored into: " + $prof) -ForegroundColor Green
+            }
+            Copy-Item $zip "C:\M11Data\cloud_state.zip" -Force -ErrorAction SilentlyContinue
+            Write-Host "User files, desktop items and game state restored." -ForegroundColor Green
+        }
+
+    - name: 2A2. Session Hardening + Self-Healing Toolkit (v1.12)
+      run: |
+        Write-Host ">>> M11 v1.12 SESSION HARDENING <<<" -ForegroundColor Cyan
+
+        # --- 1. user + groups -------------------------------------------------
+        $plainPass = "M11Pass#2026"
+        $sec = ConvertTo-SecureString $plainPass -AsPlainText -Force
+        try { New-LocalUser -Name "M11 Dev-Tool" -Password $sec -AccountNeverExpires -ErrorAction SilentlyContinue } catch { }
+        try { Set-LocalUser  -Name "M11 Dev-Tool" -Password $sec -AccountNeverExpires -ErrorAction SilentlyContinue } catch { }
+        cmd.exe /c "net user `"M11 Dev-Tool`" `"M11Pass#2026`" /add /active:yes /expires:never" 2>$null | Out-Null
+        cmd.exe /c "net localgroup `"Remote Desktop Users`" `"M11 Dev-Tool`" /add" 2>$null | Out-Null
+        cmd.exe /c "net localgroup `"Administrators`" `"M11 Dev-Tool`" /add" 2>$null | Out-Null
+        cmd.exe /c "wmic useraccount where name='M11 Dev-Tool' set PasswordExpires=false" 2>$null | Out-Null
+
+        # --- 2. auto-logon (this is what made RDP land on "Other user") -------
+        try {
+            $wl = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+            Set-ItemProperty -Path $wl -Name 'AutoAdminLogon'    -Value '1'            -Type String -Force -ErrorAction Stop
+            Set-ItemProperty -Path $wl -Name 'DefaultUserName'   -Value 'M11 Dev-Tool' -Type String -Force -ErrorAction Stop
+            Set-ItemProperty -Path $wl -Name 'DefaultPassword'   -Value $plainPass     -Type String -Force -ErrorAction Stop
+            Set-ItemProperty -Path $wl -Name 'DefaultDomainName' -Value $env:COMPUTERNAME -Type String -Force -ErrorAction Stop
+            Set-ItemProperty -Path $wl -Name 'ForceAutoLogon'    -Value '1'            -Type String -Force -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $wl -Name 'AutoLogonCount' -ErrorAction SilentlyContinue
+            Write-Host "auto-logon configured" -ForegroundColor Green
+        } catch { Write-Host ("auto-logon warning: " + $_.Exception.Message) -ForegroundColor Yellow }
+
+        # --- 3. session policy: stop "too many users signed in" --------------
+        try {
+            $ts = 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server'
+            Set-ItemProperty -Path $ts -Name 'fSingleSessionPerUser' -Value 1 -Type DWord -Force
+            Set-ItemProperty -Path $ts -Name 'fDenyTSConnections'    -Value 0 -Type DWord -Force
+            Set-ItemProperty -Path "$ts\WinStations\RDP-Tcp" -Name 'MaxDisconnectionTime' -Value 900000 -Type DWord -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "$ts\WinStations\RDP-Tcp" -Name 'MaxIdleTime' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+            Write-Host "session policy configured" -ForegroundColor Green
+        } catch { Write-Host ("policy warning: " + $_.Exception.Message) -ForegroundColor Yellow }
+
+        # --- 4. self-heal: pull the corrected toolkit from the repository -----
+        try {
+            $base = "https://raw.githubusercontent.com/${{ github.repository }}/main"
+            foreach ($f in @('M11_RDP_REPAIR.ps1','toolkit/M11_MASTER_RUNNER.bat','toolkit/M11_MASTER_CONTROL_CENTER.bat','toolkit/M11_UNIVERSAL_STORE.bat','toolkit/M11_GAMES_HUB.bat','toolkit/_M11_SELF_TEST.bat')) {
+                $dst = "C:\M11Data\toolkit\" + (Split-Path $f -Leaf)
+                New-Item -ItemType Directory -Path "C:\M11Data\toolkit" -Force -ErrorAction SilentlyContinue | Out-Null
+                curl.exe -fsSL "$base/$f" -o $dst 2>$null
+            }
+            if (Test-Path "C:\M11Data\toolkit\M11_MASTER_RUNNER.bat") {
+                Write-Host "corrected toolkit fetched from repository" -ForegroundColor Green
+                $rep = "C:\M11Data\toolkit\M11_RDP_REPAIR.ps1"
+                if (Test-Path $rep) {
+                    powershell.exe -NoProfile -ExecutionPolicy Bypass -File $rep
+                    Write-Host "self-heal repair executed" -ForegroundColor Green
+                }
+            } else {
+                Write-Host "toolkit not present in repository yet - client will deploy it" -ForegroundColor Yellow
+            }
+        } catch { Write-Host ("self-heal notice: " + $_.Exception.Message) -ForegroundColor Yellow }
+
     - name: 2B. M11 Gaming & 3D App Hyper-Bypass Engine (Roblox, DirectX, Audiosrv, Anti-Cheat)
       run: |
         Write-Host ">>> Activating M11 Gaming & 3D App Hyper-Bypass Engine <<<" -ForegroundColor Green
@@ -537,7 +610,7 @@ jobs:
         )
         foreach ($cp in $cfgPaths) {
             New-Item -ItemType Directory -Path $cp -Force -ErrorAction SilentlyContinue | Out-Null
-            $rblxFlags | Out-File -FilePath "$cp\ClientAppSettings.json" -Encoding ascii -Force
+            [System.IO.File]::WriteAllText("$cp\ClientAppSettings.json", $rblxFlags, (New-Object System.Text.UTF8Encoding($false)))
         }
 
         # 3. Create Startup Splash Screen Script (Honoring Student Developer Mohamed El-Sayed Abdelfattah)
@@ -609,7 +682,7 @@ jobs:
 
         `$form.ShowDialog() | Out-Null
         "@
-        $splashPs1 | Out-File -FilePath "C:\M11Data\M11_Startup_Splash.ps1" -Encoding utf8 -Force
+        [System.IO.File]::WriteAllText("C:\M11Data\M11_Startup_Splash.ps1", $splashPs1, (New-Object System.Text.UTF8Encoding($false)))
 
         # Startup launch batch
         $welcomeBat = @"
@@ -623,7 +696,7 @@ jobs:
         )
         foreach ($st in $startupDirs) {
             if (-not (Test-Path $st)) { New-Item -ItemType Directory -Path $st -Force -ErrorAction SilentlyContinue | Out-Null }
-            $welcomeBat | Out-File -FilePath "$st\M11_Welcome.bat" -Encoding ascii -Force
+            [System.IO.File]::WriteAllText("$st\M11_Welcome.bat", $welcomeBat, (New-Object System.Text.UTF8Encoding($false)))
         }
     - name: 2E. Deploy M11 Tool Suite Core Gaming & System Engines on Desktop
       run: |
@@ -1019,16 +1092,16 @@ jobs:
             if (-not (Test-Path $subDir)) { New-Item -ItemType Directory -Path $subDir -Force -ErrorAction SilentlyContinue | Out-Null }
 
             # Deploy Master Control Center directly on Desktop
-            Set-Content -Path (Join-Path $desk "⚡_M11_MASTER_CONTROL_CENTER.bat") -Value $masterControlCenterBat -Encoding utf8
-            Set-Content -Path (Join-Path $desk "⚡_MASTER_RUNNER.bat") -Value $masterControlCenterBat -Encoding utf8
-            Set-Content -Path (Join-Path $toolDir "⚡_M11_MASTER_CONTROL_CENTER.bat") -Value $masterControlCenterBat -Encoding utf8
+            [System.IO.File]::WriteAllText((Join-Path $desk "⚡_M11_MASTER_CONTROL_CENTER.bat"), $masterControlCenterBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText((Join-Path $desk "⚡_MASTER_RUNNER.bat"), $masterControlCenterBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText((Join-Path $toolDir "⚡_M11_MASTER_CONTROL_CENTER.bat"), $masterControlCenterBat, (New-Object System.Text.UTF8Encoding($false)))
 
             # Deploy Core Scripts in Engines folder
-            Set-Content -Path (Join-Path $subDir "01_Roblox_Deep_Fix_And_Installer.bat") -Value $robloxDeepBat -Encoding utf8
-            Set-Content -Path (Join-Path $subDir "02_Install_Gaming_Stores_Steam_Epic_Minecraft.bat") -Value $storesBat -Encoding utf8
-            Set-Content -Path (Join-Path $subDir "03_DirectX11_WARP_Mesa3D_GPU_Booster.bat") -Value $gpuBat -Encoding utf8
-            Set-Content -Path (Join-Path $subDir "04_Free_Up_100GB_Disk_Space.bat") -Value $cleanBat -Encoding utf8
-            Set-Content -Path (Join-Path $subDir "05_Unlock_Full_Root_Admin_Privileges.bat") -Value $adminBat -Encoding utf8
+            [System.IO.File]::WriteAllText((Join-Path $subDir "01_Roblox_Deep_Fix_And_Installer.bat"), $robloxDeepBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText((Join-Path $subDir "02_Install_Gaming_Stores_Steam_Epic_Minecraft.bat"), $storesBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText((Join-Path $subDir "03_DirectX11_WARP_Mesa3D_GPU_Booster.bat"), $gpuBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText((Join-Path $subDir "04_Free_Up_100GB_Disk_Space.bat"), $cleanBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText((Join-Path $subDir "05_Unlock_Full_Root_Admin_Privileges.bat"), $adminBat, (New-Object System.Text.UTF8Encoding($false)))
         }
         Write-Host "M11 Core Desktop Engines deployed successfully!" -ForegroundColor Green
 
@@ -1199,11 +1272,11 @@ jobs:
             $subDir = "$mainDir\📁_Engines_And_Scripts"
             if (-not (Test-Path $subDir)) { New-Item -ItemType Directory -Path $subDir -Force -ErrorAction SilentlyContinue | Out-Null }
 
-            $appsBat | Out-File -FilePath "$subDir\06_Install_Developer_And_Productivity_Apps.bat" -Encoding ascii -Force
-            $backupBat | Out-File -FilePath "$subDir\07_Instant_Cloud_Backup.bat" -Encoding ascii -Force
-            $restoreBat | Out-File -FilePath "$subDir\08_Cloud_Session_Auto_Restorer.bat" -Encoding ascii -Force
-            $pingBat | Out-File -FilePath "$subDir\09_Internet_Speed_And_Ping_Booster.bat" -Encoding ascii -Force
-            $audioBat | Out-File -FilePath "$subDir\10_Audio_Microphone_Virtual_Cable.bat" -Encoding ascii -Force
+            [System.IO.File]::WriteAllText("$subDir\06_Install_Developer_And_Productivity_Apps.bat", $appsBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText("$subDir\07_Instant_Cloud_Backup.bat", $backupBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText("$subDir\08_Cloud_Session_Auto_Restorer.bat", $restoreBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText("$subDir\09_Internet_Speed_And_Ping_Booster.bat", $pingBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText("$subDir\10_Audio_Microphone_Virtual_Cable.bat", $audioBat, (New-Object System.Text.UTF8Encoding($false)))
         }
         Write-Host "M11 Advanced Productivity, Network, Audio & Auto-Restore Engines deployed 100% successfully!" -ForegroundColor Green
     - name: 2G. Deploy M11 Universal App Store, 32GB Virtual RAM & AIO Runtimes
@@ -1448,11 +1521,11 @@ jobs:
             $subDir = "$mainDir\📁_Engines_And_Scripts"
             if (-not (Test-Path $subDir)) { New-Item -ItemType Directory -Path $subDir -Force -ErrorAction SilentlyContinue | Out-Null }
 
-            $universalStoreBat | Out-File -FilePath "$mainDir\🛒_M11_UNIVERSAL_STORE.bat" -Encoding ascii -Force
-            $runtimesBat | Out-File -FilePath "$subDir\11_All_In_One_Gaming_Runtimes_AIO.bat" -Encoding ascii -Force
-            $wingetBat | Out-File -FilePath "$subDir\12_Universal_Package_Manager_Winget_Choco.bat" -Encoding ascii -Force
-            $vramBat | Out-File -FilePath "$subDir\13_Virtual_RAM_32GB_Pagefile_Booster.bat" -Encoding ascii -Force
-            $creativeBat | Out-File -FilePath "$subDir\14_Creative_Media_And_Recording_Suite.bat" -Encoding ascii -Force
+            [System.IO.File]::WriteAllText("$mainDir\🛒_M11_UNIVERSAL_STORE.bat", $universalStoreBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText("$subDir\11_All_In_One_Gaming_Runtimes_AIO.bat", $runtimesBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText("$subDir\12_Universal_Package_Manager_Winget_Choco.bat", $wingetBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText("$subDir\13_Virtual_RAM_32GB_Pagefile_Booster.bat", $vramBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText("$subDir\14_Creative_Media_And_Recording_Suite.bat", $creativeBat, (New-Object System.Text.UTF8Encoding($false)))
         }
         Write-Host "M11 Universal App Store, 32GB Virtual RAM & AIO Runtimes deployed successfully!" -ForegroundColor Green
     - name: 2H. Deploy GTA V & Heavy Games Suite on Desktop
@@ -1622,91 +1695,27 @@ jobs:
             $subDir = "$mainDir\📁_Engines_And_Scripts"
             if (-not (Test-Path $subDir)) { New-Item -ItemType Directory -Path $subDir -Force -ErrorAction SilentlyContinue | Out-Null }
 
-            $gtaDownloaderBat | Out-File -FilePath "$mainDir\🎮_DOWNLOAD_GTA_V_AND_HEAVY_GAMES.bat" -Encoding ascii -Force
-            $gtaDownloaderBat | Out-File -FilePath "$subDir\15_GTA_V_And_Heavy_Games_Downloader.bat" -Encoding ascii -Force
+            [System.IO.File]::WriteAllText("$mainDir\🎮_DOWNLOAD_GTA_V_AND_HEAVY_GAMES.bat", $gtaDownloaderBat, (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText("$subDir\15_GTA_V_And_Heavy_Games_Downloader.bat", $gtaDownloaderBat, (New-Object System.Text.UTF8Encoding($false)))
         }
         Write-Host "GTA V & Heavy Games Suite deployed on Desktop!" -ForegroundColor Green
     - name: 2D. Deploy Data Persistence Daemon & Security Rules
       run: |
-        Write-Host ">>> Deploying Data Persistence Daemon & Security Rules <<<" -ForegroundColor Green
+        Write-Host ">>> Deploying M11 v1.12 Persistence Daemon <<<" -ForegroundColor Green
+        Add-MpPreference -ExclusionPath "C:\M11Data" -ErrorAction SilentlyContinue
+        Add-MpPreference -ExclusionProcess "RobloxPlayerBeta.exe" -ErrorAction SilentlyContinue
 
-        # 1. Windows Defender Gaming Exclusions
-        try {
-            Add-MpPreference -ExclusionProcess "RobloxPlayerBeta.exe", "RobloxPlayerLauncher.exe", "RobloxStudioBeta.exe" -ErrorAction SilentlyContinue
-            Add-MpPreference -ExclusionPath "C:\Users\M11 Dev-Tool\AppData\Local\Roblox" -ErrorAction SilentlyContinue
-            Add-MpPreference -ExclusionPath "C:\Users\runneradmin\AppData\Local\Roblox" -ErrorAction SilentlyContinue
-            Add-MpPreference -ExclusionPath "C:\M11Data" -ErrorAction SilentlyContinue
-        } catch {}
-
-        # 2. Deploy Advanced Real-Time Persistence Daemon
-        New-Item -ItemType Directory -Path "C:\M11Data" -Force -ErrorAction SilentlyContinue | Out-Null
-        $daemonLines = @(
-            'param([switch]$ForceNow, [switch]$Daemon)',
-            '$token = "${{ github.event.inputs.pat_token }}"',
-            'if (-not $token) { $token = "${{ secrets.GITHUB_TOKEN }}" }',
-            '$repo = "${{ github.repository }}"',
-            '$staging = "C:\M11Data\staging"',
-            '$zipPath = "C:\M11Data\cloud_state.zip"',
-            '$hashPath = "C:\M11Data\last_hash.txt"',
-            'function Invoke-M11SafeSync {',
-            '    param([string]$reason = "Auto-Sync")',
-            '    try {',
-            '        if (-not (Test-Path $staging)) { New-Item -ItemType Directory -Path $staging -Force | Out-Null }',
-            '        if (Test-Path "C:\Users\M11 Dev-Tool\Desktop") { robocopy "C:\Users\M11 Dev-Tool\Desktop" "$staging\Desktop" /E /R:1 /W:1 /XF *.tmp *.crdownload *.lock desktop.ini *.bat | Out-Null }',
-            '        if (Test-Path "C:\Users\M11 Dev-Tool\Documents") { robocopy "C:\Users\M11 Dev-Tool\Documents" "$staging\Documents" /E /R:1 /W:1 /XF *.tmp *.crdownload *.lock | Out-Null }',
-            '        if (Test-Path "C:\Users\M11 Dev-Tool\Downloads") { robocopy "C:\Users\M11 Dev-Tool\Downloads" "$staging\Downloads" /E /R:1 /W:1 /XF *.tmp *.crdownload *.lock | Out-Null }',
-            '        if (Test-Path "C:\Users\M11 Dev-Tool\AppData\Local\Roblox\ClientSettings") { robocopy "C:\Users\M11 Dev-Tool\AppData\Local\Roblox\ClientSettings" "$staging\RobloxSettings" /E /R:1 /W:1 | Out-Null }',
-            '        $chromeDefault = "C:\Users\M11 Dev-Tool\AppData\Local\Google\Chrome\User Data\Default"',
-            '        if (Test-Path $chromeDefault) {',
-            '            if (-not (Test-Path "$staging\ChromeData")) { New-Item -ItemType Directory -Path "$staging\ChromeData" -Force | Out-Null }',
-            '            foreach ($f in @("Bookmarks", "History", "Preferences")) { if (Test-Path "$chromeDefault\$f") { Copy-Item "$chromeDefault\$f" "$staging\ChromeData\$f" -Force -ErrorAction SilentlyContinue } }',
-            '        }',
-            '        if (Test-Path $zipPath) { Remove-Item $zipPath -Force -ErrorAction SilentlyContinue }',
-            '        Compress-Archive -Path "$staging\*" -DestinationPath $zipPath -Force -ErrorAction SilentlyContinue',
-            '        if (Test-Path $zipPath) {',
-            '            $bytes = [System.IO.File]::ReadAllBytes($zipPath)',
-            '            $sha256 = (Get-FileHash -Algorithm SHA256 -Path $zipPath).Hash',
-            '            $lastHash = if (Test-Path $hashPath) { Get-Content $hashPath -Raw } else { "" }',
-            '            if ($sha256 -eq $lastHash.Trim() -and -not $ForceNow) { return }',
-            '            $b64 = [System.Convert]::ToBase64String($bytes)',
-            '            $checkUrl = "https://api.github.com/repos/$repo/contents/cloud_state.zip"',
-            '            $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-SyncEngine-v011" }',
-            '            $sha = $null',
-            '            try {',
-            '                $rf = Invoke-RestMethod -Uri $checkUrl -Headers $headers -ErrorAction SilentlyContinue',
-            '                if ($rf -and $rf.sha) { $sha = $rf.sha }',
-            '            } catch {}',
-            '            $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")',
-            '            $body = @{ message = "M11 Continuous Sync [$timestamp - $reason]"; content = $b64 }',
-            '            if ($sha) { $body["sha"] = $sha }',
-            '            Invoke-RestMethod -Uri $checkUrl -Headers $headers -Method Put -Body ($body | ConvertTo-Json) -ErrorAction SilentlyContinue | Out-Null',
-            '            $sha256 | Out-File -FilePath $hashPath -Encoding ascii -Force',
-            '            $statusMsg = "Last Cloud Sync: $timestamp | Reason: $reason | Status: 100% Secured"',
-            '            $statusMsg | Out-File -FilePath "C:\Users\M11 Dev-Tool\Desktop\LAST_BACKUP_STATUS.txt" -Encoding utf8 -Force',
-            '            Write-Host "[M11-SYNC SUCCESS] $statusMsg" -ForegroundColor Green',
-            '        }',
-            '    } catch {}',
-            '}',
-            'if ($ForceNow) { Invoke-M11SafeSync -reason "Manual Trigger"; exit 0 }',
-            'if ($Daemon) {',
-            '    Write-Host "M11 Continuous Persistence Daemon running in background..." -ForegroundColor Green',
-            '    Invoke-M11SafeSync -reason "Initial Boot"',
-            '    $lastPeriodic = Get-Date',
-            '    while ($true) {',
-            '        Start-Sleep -Seconds 10',
-            '        $now = Get-Date',
-            '        if (($now - $lastPeriodic).TotalSeconds -ge 180) {',
-            '            $lastPeriodic = $now',
-            '            Invoke-M11SafeSync -reason "3-Minute Periodic Auto-Sync"',
-            '        }',
-            '    }',
-            '}'
-        )
-        $daemonLines | Out-File -FilePath "C:\M11Data\m11_persistent_daemon.ps1" -Encoding ascii -Force
-
-        # 3. Activate 24/7 Real-Time Data Persistence Daemon
-        Write-Host "Activating 24/7 Real-Time Data Persistence Daemon..." -ForegroundColor Green
+        $daemonB64 = 'cGFyYW0oW3N3aXRjaF0kRm9yY2VOb3csIFtzd2l0Y2hdJERhZW1vbikKJHRva2VuID0gIlJFUExBQ0VfUEFUIgppZiAoLW5vdCAkdG9rZW4pIHsgJHRva2VuID0gIlJFUExBQ0VfR0hUIiB9CiRyZXBvID0gIlJFUExBQ0VfUkVQTyIKJHN0YWdpbmcgPSAiQzpcTTExRGF0YVxzdGFnaW5nIgokemlwUGF0aCA9ICJDOlxNMTFEYXRhXGNsb3VkX3N0YXRlLnppcCIKJGhhc2hQYXRoID0gIkM6XE0xMURhdGFcbGFzdF9oYXNoLnR4dCIKJHRyaWdnZXIgPSAiQzpcTTExRGF0YVxzeW5jX25vdy50cmlnZ2VyIgokaGVhZGVycyA9IEB7ICJBdXRob3JpemF0aW9uIiA9ICJCZWFyZXIgJHRva2VuIjsgIlVzZXItQWdlbnQiID0gIk0xMS1TeW5jLXYxMTIiIH0KCmZ1bmN0aW9uIFdyaXRlLU0xMUxvZyhbc3RyaW5nXSRtKSB7CiAgICAkbGluZSA9ICIkKEdldC1EYXRlIC1Gb3JtYXQgJ0hIOm1tOnNzJykgfCAkbSIKICAgIEFkZC1Db250ZW50IC1QYXRoICJDOlxNMTFEYXRhXG0xMV9zeW5jLmxvZyIgLVZhbHVlICRsaW5lIC1FbmNvZGluZyBVVEY4CiAgICBXcml0ZS1Ib3N0ICRsaW5lCn0KCmZ1bmN0aW9uIEludm9rZS1NMTFTYWZlU3luYyB7CiAgICBwYXJhbShbc3RyaW5nXSRyZWFzb24gPSAiQXV0by1TeW5jIikKICAgIHRyeSB7CiAgICAgICAgaWYgKC1ub3QgKFRlc3QtUGF0aCAkc3RhZ2luZykpIHsgTmV3LUl0ZW0gLUl0ZW1UeXBlIERpcmVjdG9yeSAtUGF0aCAkc3RhZ2luZyAtRm9yY2UgfCBPdXQtTnVsbCB9CiAgICAgICAgJHVzZXIgPSAiQzpcVXNlcnNcTTExIERldi1Ub29sIgogICAgICAgIGlmICgtbm90IChUZXN0LVBhdGggIiR1c2VyXERlc2t0b3AiKSkgeyAkdXNlciA9ICRlbnY6VVNFUlBST0ZJTEUgfQogICAgICAgICRtYXAgPSBAewogICAgICAgICAgICAiJHVzZXJcRGVza3RvcCIgICAgPSAiJHN0YWdpbmdcRGVza3RvcCIKICAgICAgICAgICAgIiR1c2VyXERvY3VtZW50cyIgID0gIiRzdGFnaW5nXERvY3VtZW50cyIKICAgICAgICAgICAgIiR1c2VyXERvd25sb2FkcyIgID0gIiRzdGFnaW5nXERvd25sb2FkcyIKICAgICAgICAgICAgIiR1c2VyXEFwcERhdGFcTG9jYWxcUm9ibG94XENsaWVudFNldHRpbmdzIiA9ICIkc3RhZ2luZ1xSb2Jsb3hTZXR0aW5ncyIKICAgICAgICB9CiAgICAgICAgZm9yZWFjaCAoJGsgaW4gJG1hcC5LZXlzKSB7CiAgICAgICAgICAgIGlmIChUZXN0LVBhdGggJGspIHsKICAgICAgICAgICAgICAgIGlmICgtbm90IChUZXN0LVBhdGggJG1hcFska10pKSB7IE5ldy1JdGVtIC1JdGVtVHlwZSBEaXJlY3RvcnkgLVBhdGggJG1hcFska10gLUZvcmNlIHwgT3V0LU51bGwgfQogICAgICAgICAgICAgICAgcm9ib2NvcHkgJGsgJG1hcFska10gL0UgL1I6MCAvVzowIC9YRiAqLnRtcCAqLmNyZG93bmxvYWQgKi5sb2NrIGRlc2t0b3AuaW5pIC9ORkwgL05ETCAvTkpIIC9OSlMgL05QIHwgT3V0LU51bGwKICAgICAgICAgICAgfQogICAgICAgIH0KICAgICAgICAkY2hyb21lID0gIiR1c2VyXEFwcERhdGFcTG9jYWxcR29vZ2xlXENocm9tZVxVc2VyIERhdGFcRGVmYXVsdCIKICAgICAgICBpZiAoVGVzdC1QYXRoICRjaHJvbWUpIHsKICAgICAgICAgICAgaWYgKC1ub3QgKFRlc3QtUGF0aCAiJHN0YWdpbmdcQ2hyb21lRGF0YSIpKSB7IE5ldy1JdGVtIC1JdGVtVHlwZSBEaXJlY3RvcnkgLVBhdGggIiRzdGFnaW5nXENocm9tZURhdGEiIC1Gb3JjZSB8IE91dC1OdWxsIH0KICAgICAgICAgICAgZm9yZWFjaCAoJGYgaW4gQCgiQm9va21hcmtzIiwiSGlzdG9yeSIsIlByZWZlcmVuY2VzIikpIHsKICAgICAgICAgICAgICAgIGlmIChUZXN0LVBhdGggIiRjaHJvbWVcJGYiKSB7IENvcHktSXRlbSAiJGNocm9tZVwkZiIgIiRzdGFnaW5nXENocm9tZURhdGFcJGYiIC1Gb3JjZSAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZSB9CiAgICAgICAgICAgIH0KICAgICAgICB9CiAgICAgICAgaWYgKFRlc3QtUGF0aCAkemlwUGF0aCkgeyBSZW1vdmUtSXRlbSAkemlwUGF0aCAtRm9yY2UgLUVycm9yQWN0aW9uIFNpbGVudGx5Q29udGludWUgfQogICAgICAgIENvbXByZXNzLUFyY2hpdmUgLVBhdGggIiRzdGFnaW5nXCoiIC1EZXN0aW5hdGlvblBhdGggJHppcFBhdGggLUZvcmNlIC1FcnJvckFjdGlvbiBTaWxlbnRseUNvbnRpbnVlCiAgICAgICAgaWYgKC1ub3QgKFRlc3QtUGF0aCAkemlwUGF0aCkpIHsgV3JpdGUtTTExTG9nICJbU1lOQ10gYXJjaGl2ZSBjcmVhdGlvbiBmYWlsZWQiOyByZXR1cm4gfQogICAgICAgICRzaGEyNTYgPSAoR2V0LUZpbGVIYXNoIC1BbGdvcml0aG0gU0hBMjU2IC1QYXRoICR6aXBQYXRoKS5IYXNoCiAgICAgICAgJGxhc3RIYXNoID0gIiIKICAgICAgICBpZiAoVGVzdC1QYXRoICRoYXNoUGF0aCkgeyAkbGFzdEhhc2ggPSAoR2V0LUNvbnRlbnQgJGhhc2hQYXRoIC1SYXcpLlRyaW0oKSB9CiAgICAgICAgaWYgKCRzaGEyNTYgLWVxICRsYXN0SGFzaCAtYW5kIC1ub3QgJEZvcmNlTm93KSB7IHJldHVybiB9CiAgICAgICAgJGI2NCA9IFtDb252ZXJ0XTo6VG9CYXNlNjRTdHJpbmcoW1N5c3RlbS5JTy5GaWxlXTo6UmVhZEFsbEJ5dGVzKCR6aXBQYXRoKSkKICAgICAgICAkdXJsID0gImh0dHBzOi8vYXBpLmdpdGh1Yi5jb20vcmVwb3MvJHJlcG8vY29udGVudHMvY2xvdWRfc3RhdGUuemlwIgogICAgICAgICRzaGEgPSAkbnVsbAogICAgICAgIHRyeSB7ICRyZiA9IEludm9rZS1SZXN0TWV0aG9kIC1VcmkgJHVybCAtSGVhZGVycyAkaGVhZGVycyAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZTsgaWYgKCRyZi5zaGEpIHsgJHNoYSA9ICRyZi5zaGEgfSB9IGNhdGNoIHsgfQogICAgICAgICRib2R5ID0gQHsgbWVzc2FnZSA9ICJNMTEgc3luYyBbJChHZXQtRGF0ZSAtRm9ybWF0ICd5eXl5LU1NLWRkIEhIOm1tOnNzJyldICRyZWFzb24iOyBjb250ZW50ID0gJGI2NCB9CiAgICAgICAgaWYgKCRzaGEpIHsgJGJvZHlbInNoYSJdID0gJHNoYSB9CiAgICAgICAgSW52b2tlLVJlc3RNZXRob2QgLVVyaSAkdXJsIC1IZWFkZXJzICRoZWFkZXJzIC1NZXRob2QgUHV0IC1Cb2R5ICgkYm9keSB8IENvbnZlcnRUby1Kc29uKSAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZSB8IE91dC1OdWxsCiAgICAgICAgW1N5c3RlbS5JTy5GaWxlXTo6V3JpdGVBbGxUZXh0KCRoYXNoUGF0aCwgJHNoYTI1NiwgKE5ldy1PYmplY3QgU3lzdGVtLlRleHQuVVRGOEVuY29kaW5nKCRmYWxzZSkpKQogICAgICAgIFtTeXN0ZW0uSU8uRmlsZV06OldyaXRlQWxsVGV4dCgiJHVzZXJcRGVza3RvcFxMQVNUX0JBQ0tVUF9TVEFUVVMudHh0IiwgIkxhc3QgQ2xvdWQgU3luYzogJChHZXQtRGF0ZSAtRm9ybWF0ICd5eXl5LU1NLWRkIEhIOm1tOnNzJykgfCBSZWFzb246ICRyZWFzb24iLCAoTmV3LU9iamVjdCBTeXN0ZW0uVGV4dC5VVEY4RW5jb2RpbmcoJGZhbHNlKSkpCiAgICAgICAgV3JpdGUtTTExTG9nICJbU1lOQyBPS10gJHJlYXNvbiAoJChbbWF0aF06OlJvdW5kKChHZXQtSXRlbSAkemlwUGF0aCkuTGVuZ3RoLzFLQiwxKSkgS0IpIgogICAgfSBjYXRjaCB7IFdyaXRlLU0xMUxvZyAiW1NZTkMgRVJST1JdICQoJF8uRXhjZXB0aW9uLk1lc3NhZ2UpIiB9Cn0KCmlmICgkRm9yY2VOb3cpIHsgSW52b2tlLU0xMVNhZmVTeW5jIC1yZWFzb24gIk1hbnVhbCBUcmlnZ2VyIjsgZXhpdCAwIH0KaWYgKCREYWVtb24pIHsKICAgIFdyaXRlLU0xMUxvZyAiZGFlbW9uIHN0YXJ0ZWQiCiAgICBJbnZva2UtTTExU2FmZVN5bmMgLXJlYXNvbiAiSW5pdGlhbCBCb290IgogICAgJGxhc3QgPSBHZXQtRGF0ZQogICAgd2hpbGUgKCR0cnVlKSB7CiAgICAgICAgU3RhcnQtU2xlZXAgLVNlY29uZHMgMTAKICAgICAgICBpZiAoVGVzdC1QYXRoICR0cmlnZ2VyKSB7CiAgICAgICAgICAgIFJlbW92ZS1JdGVtICR0cmlnZ2VyIC1Gb3JjZSAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZQogICAgICAgICAgICBJbnZva2UtTTExU2FmZVN5bmMgLXJlYXNvbiAiT24tRGVtYW5kIFRyaWdnZXIiCiAgICAgICAgICAgICRsYXN0ID0gR2V0LURhdGUKICAgICAgICAgICAgY29udGludWUKICAgICAgICB9CiAgICAgICAgaWYgKCgoR2V0LURhdGUpIC0gJGxhc3QpLlRvdGFsU2Vjb25kcyAtZ2UgMTgwKSB7ICRsYXN0ID0gR2V0LURhdGU7IEludm9rZS1NMTFTYWZlU3luYyAtcmVhc29uICJQZXJpb2RpYyAzLU1pbnV0ZSBTeW5jIiB9CiAgICB9Cn0='
+        $daemon = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($daemonB64))
+        $daemon = $daemon.Replace('REPLACE_PAT', "${{ github.event.inputs.pat_token }}")
+        $daemon = $daemon.Replace('REPLACE_GHT', "${{ secrets.GITHUB_TOKEN }}")
+        $daemon = $daemon.Replace('REPLACE_REPO', "${{ github.repository }}")
+        [System.IO.File]::WriteAllText("C:\M11Data\m11_persistent_daemon.ps1", $daemon, (New-Object System.Text.UTF8Encoding($false)))
         Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File C:\M11Data\m11_persistent_daemon.ps1 -Daemon" -WindowStyle Hidden
+        Start-Sleep -Seconds 3
+        if (Test-Path "C:\M11Data\m11_sync.log") { Get-Content "C:\M11Data\m11_sync.log" -Tail 5 }
+        Write-Host "Persistence daemon deployed and running." -ForegroundColor Green
+
     - name: 4A. Setup Tailscale WireGuard Tunnel (Zero Credit Card)
       if: github.event.inputs.tunnel_provider == 'tailscale'
       run: |
@@ -1728,7 +1737,10 @@ jobs:
 
         Write-Host "Authenticating with Tailscale WireGuard Network..." -ForegroundColor Cyan
         $authKey = "${{ github.event.inputs.tunnel_token }}".Trim()
-        & $tailscalePath up --authkey=$authKey --hostname=m11-tool-pc --accept-routes --reset --shields-up=false --unattended
+        $nodeName = "m11-tool-pc-$('${{ github.run_id }}')"
+        if ($nodeName -notmatch '^[a-z0-9-]+$') { $nodeName = "m11-tool-pc" }
+        Write-Host "Joining Tailscale as $nodeName (unique per session = no node collisions)..." -ForegroundColor Cyan
+        & $tailscalePath up --authkey=$authKey --hostname=$nodeName --accept-routes --reset --shields-up=false --unattended
         Start-Sleep -Seconds 6
 
         # Set Tailscale network adapter to Private
@@ -1781,7 +1793,7 @@ jobs:
           status = "ONLINE"
           author = "M11 Dev - Mohamed"
         } | ConvertTo-Json
-        $info | Out-File -FilePath "m11_connect.json" -Encoding utf8
+        [System.IO.File]::WriteAllText("m11_connect.json", $info, (New-Object System.Text.UTF8Encoding($false)))
     - name: 4B. Setup Pinggy Direct Public Tunnel (Zero Client Install)
       if: github.event.inputs.tunnel_provider == 'pinggy'
       run: |
@@ -1841,7 +1853,7 @@ jobs:
           status = "ONLINE"
           author = "M11 Dev - Mohamed"
         } | ConvertTo-Json
-        $info | Out-File -FilePath "m11_connect.json" -Encoding utf8
+        [System.IO.File]::WriteAllText("m11_connect.json", $info, (New-Object System.Text.UTF8Encoding($false)))
     - name: 4C. Setup Ngrok Tunnel (Requires Credit Card on Ngrok)
       if: github.event.inputs.tunnel_provider == 'ngrok'
       run: |
@@ -1896,135 +1908,101 @@ jobs:
           status = "ONLINE"
           author = "M11 Dev - Mohamed"
         } | ConvertTo-Json
-        $info | Out-File -FilePath "m11_connect.json" -Encoding utf8
+        [System.IO.File]::WriteAllText("m11_connect.json", $info, (New-Object System.Text.UTF8Encoding($false)))
     - name: 5. Upload Connection Artifact for M11 Client App
       uses: actions/upload-artifact@v4
       with:
         name: m11-endpoint
         path: m11_connect.json
         retention-days: 1
-    - name: 6. Session Watchdog & Dual-Guard 24/7 Chaining Daemon
+    - name: 6. Session Watchdog & 24/7 Chaining (with real handover)
       run: |
         Write-Host "===========================================================================" -ForegroundColor Green
-        Write-Host "⚡ M11 TOOL - PC SESSION WATCHDOG ACTIVE & RUNNING 100% ⚡" -ForegroundColor Green
-        Write-Host ">> IMPORTANT: This step is the LIVING HEART of your Cloud PC!" -ForegroundColor Cyan
-        Write-Host ">> It keeps the Windows instance alive in Microsoft Azure for up to 6 hours." -ForegroundColor Yellow
-        Write-Host ">> DO NOT wait for this step to complete with a green checkmark!" -ForegroundColor Yellow
-        Write-Host ">> If this step finishes, the Cloud PC turns off. The spinning icon means ONLINE!" -ForegroundColor Green
-        Write-Host ">> You can connect via Remote Desktop right NOW! <<" -ForegroundColor Green
+        Write-Host " M11 v1.12 SESSION WATCHDOG - the cloud PC stays online while this runs" -ForegroundColor Green
         Write-Host "===========================================================================" -ForegroundColor Green
-        Write-Host "Lead Developer: M11 Dev - Mohamed | v1.11 Enterprise Ultra"
 
         $token = "${{ github.event.inputs.pat_token }}"
         if (-not $token) { $token = "${{ secrets.GITHUB_TOKEN }}" }
         $repo = "${{ github.repository }}"
-        $maxSeconds = 21600 # 6 hours total
+        $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-Chaining-v112" }
+        $minutes = 330          # 5h30m of runtime, chaining at 5h20m
+        $chainAt = 320
         $elapsed = 0
-        $backupInterval = 300 # Continuous Backup every 5 minutes
-        $lastBackup = 0
-        $chainTriggered = $false
+        $chained = $false
 
-        while ($elapsed -lt $maxSeconds) {
-          Start-Sleep -Seconds 60
-          $elapsed += 60
-
-          # Periodic Auto-Backup to Cloud (Every 5 Minutes Continuous Sync)
-          if (($elapsed - $lastBackup) -ge $backupInterval) {
-            $lastBackup = $elapsed
-            Write-Host "Continuous State Sync: Preserving user files to Cloud (M11 Dev-Tool + runneradmin)..." -ForegroundColor Cyan
-            try {
-              $candPaths = @(
-                "C:\Users\M11 Dev-Tool\Desktop",
-                "C:\Users\M11 Dev-Tool\Documents",
-                "C:\Users\M11 Dev-Tool\Downloads",
-                "C:\Users\M11 Dev-Tool\AppData\Local\Roblox\ClientSettings",
-                "C:\Users\runneradmin\Desktop",
-                "C:\Users\runneradmin\Documents"
-              )
-              $pathsToSave = @()
-              foreach ($cp in $candPaths) {
-                if (Test-Path $cp) { $pathsToSave += $cp }
-              }
-
-              if ($pathsToSave.Count -gt 0) {
-                Compress-Archive -Path $pathsToSave -DestinationPath "cloud_state.zip" -Force -ErrorAction SilentlyContinue
-                if (Test-Path "cloud_state.zip") {
-                  $bytes = [System.IO.File]::ReadAllBytes("cloud_state.zip")
-                  $b64 = [System.Convert]::ToBase64String($bytes)
-
-                  $checkUrl = "https://api.github.com/repos/$repo/contents/cloud_state.zip"
-                  $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-Sync-v111" }
-                  $sha = $null
-                  try {
-                    $remoteFile = Invoke-RestMethod -Uri $checkUrl -Headers $headers -ErrorAction SilentlyContinue
-                    if ($remoteFile -and $remoteFile.sha) { $sha = $remoteFile.sha }
-                  } catch {}
-
-                  $body = @{
-                    message = "M11 Tool - PC Auto-Backup at $($elapsed)s [Continuous Sync]"
-                    content = $b64
-                  }
-                  if ($sha) { $body["sha"] = $sha }
-
-                  Invoke-RestMethod -Uri $checkUrl -Headers $headers -Method Put -Body ($body | ConvertTo-Json) -ErrorAction SilentlyContinue | Out-Null
-                  Write-Host "Auto-Backup completed! All files and Roblox settings secured in Cloud." -ForegroundColor Green
-                }
-              }
-            } catch {
-              Write-Host "Backup notice: $_"
-            }
-          }
-
-          # 20 Minutes before 6-hour limit: Trigger Next Runner (Chaining / Never-ending PC)
-          if ($elapsed -ge 20400 -and -not $chainTriggered) { # 5h 40m
-            $chainTriggered = $true
-            Write-Host "SESSION CHAINING: 20 minutes remaining! Performing final pre-handover state flush..." -ForegroundColor Yellow
-            try {
-              # Emergency pre-handover flush
-              $flushPaths = @()
-              foreach ($cp in @("C:\Users\M11 Dev-Tool\Desktop", "C:\Users\M11 Dev-Tool\Documents", "C:\Users\M11 Dev-Tool\Downloads", "C:\Users\M11 Dev-Tool\AppData\Local\Roblox\ClientSettings")) {
-                if (Test-Path $cp) { $flushPaths += $cp }
-              }
-              if ($flushPaths.Count -gt 0) {
-                Compress-Archive -Path $flushPaths -DestinationPath "cloud_state.zip" -Force -ErrorAction SilentlyContinue
-                $bytes = [System.IO.File]::ReadAllBytes("cloud_state.zip")
-                $b64 = [System.Convert]::ToBase64String($bytes)
-                $checkUrl = "https://api.github.com/repos/$repo/contents/cloud_state.zip"
-                $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-Flush-v111" }
-                $sha = $null
-                try {
-                  $rf = Invoke-RestMethod -Uri $checkUrl -Headers $headers -ErrorAction SilentlyContinue
-                  if ($rf -and $rf.sha) { $sha = $rf.sha }
-                } catch {}
-                $bData = @{ message = "M11 Pre-Chaining Emergency Flush"; content = $b64 }
-                if ($sha) { $bData["sha"] = $sha }
-                Invoke-RestMethod -Uri $checkUrl -Headers $headers -Method Put -Body ($bData | ConvertTo-Json) -ErrorAction SilentlyContinue | Out-Null
-                Write-Host "Final state flush completed before handover!" -ForegroundColor Green
-              }
-            } catch {}
-
-            Write-Host "Dispatching next Cloud PC runner to keep session alive 24/7..." -ForegroundColor Yellow
-            try {
-              $dispatchUrl = "https://api.github.com/repos/$repo/actions/workflows/m11_cloud_pc.yml/dispatches"
-              $dispatchBody = @{
-                ref = "main"
-                inputs = @{
-                  tunnel_provider = "${{ github.event.inputs.tunnel_provider }}"
-                  tunnel_token = "${{ github.event.inputs.tunnel_token }}"
-                  enable_persistence = "true"
-                  pat_token = $token
-                }
-              } | ConvertTo-Json
-              $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-Chaining-v011" }
-              Invoke-RestMethod -Uri $dispatchUrl -Headers $headers -Method Post -Body $dispatchBody -ErrorAction SilentlyContinue | Out-Null
-              Write-Host "Next runner dispatched! Seamless 24/7 handover initiated." -ForegroundColor Green
-            } catch {
-              Write-Host "Chaining notice: $_"
-            }
-          }
-
-          if ($elapsed % 120 -eq 0) {
-            $mins = [int]($elapsed / 60)
-            Write-Host "[ONLINE & HEALTHY] ⚡ Cloud PC is Active: $mins / 360 minutes elapsed (60 FPS Stream Healthy - Ready to connect!)." -ForegroundColor Green
-          }
+        function Write-M11Log([string]$m) {
+            $line = "$(Get-Date -Format 'HH:mm:ss') | $m"
+            Add-Content -Path "C:\M11Data\m11_watchdog.log" -Value $line -Encoding UTF8
+            Write-Host $line
         }
+
+        function Sync-CloudState([string]$reason) {
+            try {
+                $paths = @()
+                foreach ($p in @("C:\Users\M11 Dev-Tool\Desktop","C:\Users\M11 Dev-Tool\Documents","C:\Users\M11 Dev-Tool\Downloads","C:\Users\M11 Dev-Tool\AppData\Local\Roblox\ClientSettings")) {
+                    if (Test-Path $p) { $paths += $p }
+                }
+                if ($paths.Count -eq 0) { return }
+                $stg = "C:\M11Data\staging_watchdog"
+                if (Test-Path $stg) { Remove-Item $stg -Recurse -Force -ErrorAction SilentlyContinue }
+                New-Item -ItemType Directory -Path $stg -Force | Out-Null
+                [System.IO.File]::WriteAllText("C:\M11Data\sync_now.trigger", "flush", (New-Object System.Text.UTF8Encoding($false)))
+                Start-Sleep -Seconds 12
+                Compress-Archive -Path $paths -DestinationPath "C:\M11Data\watchdog_state.zip" -Force -ErrorAction SilentlyContinue
+                if (-not (Test-Path "C:\M11Data\watchdog_state.zip")) { return }
+                $b64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes("C:\M11Data\watchdog_state.zip"))
+                $url = "https://api.github.com/repos/$repo/contents/cloud_state.zip"
+                $sha = $null
+                try { $rf = Invoke-RestMethod -Uri $url -Headers $headers -ErrorAction SilentlyContinue; if ($rf.sha) { $sha = $rf.sha } } catch { }
+                $body = @{ message = "M11 watchdog flush: $reason"; content = $b64 }
+                if ($sha) { $body["sha"] = $sha }
+                Invoke-RestMethod -Uri $url -Headers $headers -Method Put -Body ($body | ConvertTo-Json) -ErrorAction SilentlyContinue | Out-Null
+                Write-M11Log "[FLUSH OK] $reason"
+            } catch { Write-M11Log "[FLUSH ERROR] $($_.Exception.Message)" }
+        }
+
+        while ($elapsed -lt ($minutes * 60)) {
+            Start-Sleep -Seconds 60
+            $elapsed += 60
+            if ($elapsed % 600 -eq 0) { Write-M11Log ("cloud PC online: " + [int]($elapsed/60) + " / " + $minutes + " minutes") }
+
+            if ($elapsed -ge ($chainAt * 60) -and -not $chained) {
+                $chained = $true
+                Write-M11Log "handover window reached - flushing state first"
+                Sync-CloudState "pre-handover"
+
+                # only now cancel older runs of this workflow
+                try {
+                    $runs = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/actions/runs?per_page=20" -Headers $headers
+                    foreach ($r in $runs.workflow_runs) {
+                        if ($r.status -in @('in_progress','queued') -and $r.id -ne ${{ github.run_id }}) {
+                            Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/actions/runs/$($r.id)/cancel" -Headers $headers -Method Post -ErrorAction SilentlyContinue | Out-Null
+                            Write-M11Log ("cancelled older run " + $r.id)
+                        }
+                    }
+                } catch { Write-M11Log "cancel notice: $($_.Exception.Message)" }
+
+                try {
+                    $dispatchBody = @{
+                        ref = "main"
+                        inputs = @{
+                            tunnel_provider   = "${{ github.event.inputs.tunnel_provider }}"
+                            tunnel_token      = "${{ github.event.inputs.tunnel_token }}"
+                            enable_persistence= "true"
+                            session_hours     = "6"
+                            pat_token         = $token
+                        }
+                    } | ConvertTo-Json
+                    Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/actions/workflows/m11_cloud_pc.yml/dispatches" -Headers $headers -Method Post -Body $dispatchBody -ErrorAction SilentlyContinue | Out-Null
+                    Write-M11Log "next session dispatched - handover complete"
+                } catch { Write-M11Log "dispatch notice: $($_.Exception.Message)" }
+
+                Start-Sleep -Seconds 60
+                Sync-CloudState "post-handover safety flush"
+                Write-M11Log "watchdog exiting so this runner is released to the chained session"
+                exit 0
+            }
+        }
+        Sync-CloudState "session end"
+        exit 0
+
