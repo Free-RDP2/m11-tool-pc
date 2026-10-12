@@ -56,8 +56,17 @@ echo   [T] Self test ^(verify every file^)
 echo   [0] Exit
 echo ==============================================================================
 set "opt="
+rem --- optional command line argument: M11 script 0|1|2... runs that entry directly ---
+if not "%~1"=="" set "opt=%~1"
+if defined opt goto dispatch
 set /p opt="Choice: "
-if not defined opt goto menu
+if not defined opt (
+    echo.
+    echo [!] No input available ^(non-interactive session^) - closing.
+    timeout /t 2 >nul
+    exit /b 9
+)
+:dispatch
 
 if /i "%opt%"=="1" set "F=00_System_And_3D_Gaming_Turbo_Optimizer.bat" & goto runfirst
 if /i "%opt%"=="2" set "F=09_Internet_Speed_And_Ping_Booster.bat" & goto run
