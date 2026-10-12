@@ -408,7 +408,7 @@ jobs:
         # --- 4. self-heal: pull the corrected toolkit from the repository -----
         try {
             $base = "https://raw.githubusercontent.com/${{ github.repository }}/main"
-            foreach ($f in @('M11_RDP_REPAIR.ps1','toolkit/M11_MASTER_RUNNER.bat','toolkit/M11_MASTER_CONTROL_CENTER.bat','toolkit/M11_UNIVERSAL_STORE.bat','toolkit/M11_GAMES_HUB.bat','toolkit/_M11_SELF_TEST.bat')) {
+            foreach ($f in @('M11_RDP_REPAIR.ps1','toolkit/M11_MASTER_RUNNER.bat','toolkit/M11_MASTER_CONTROL_CENTER.bat','toolkit/M11_UNIVERSAL_STORE.bat','toolkit/M11_GAMES_HUB.bat','toolkit/_M11_SELF_TEST.bat','toolkit/_M11_MOJI_CHECK.ps1','toolkit/_M11_WINGET_ENSURE.bat','toolkit/_M11_WINGET_FIND.ps1','toolkit/_M11_WINGET_BOOTSTRAP.ps1','toolkit/00_System_And_3D_Gaming_Turbo_Optimizer.bat')) {
                 $dst = "C:\M11Data\toolkit\" + (Split-Path $f -Leaf)
                 New-Item -ItemType Directory -Path "C:\M11Data\toolkit" -Force -ErrorAction SilentlyContinue | Out-Null
                 curl.exe -fsSL "$base/$f" -o $dst 2>$null
