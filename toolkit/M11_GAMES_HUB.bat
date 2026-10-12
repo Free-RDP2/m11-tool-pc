@@ -5,6 +5,19 @@ title M11 GAMES HUB - Official Launchers & Free Games (v1.12)
 color 0c
 cd /d "%~dp0"
 
+rem --- winget availability gate (works under SYSTEM too) ---
+call "%~dp0_M11_WINGET_ENSURE.bat"
+set "WG_OK=%errorlevel%"
+if not "%WG_OK%"=="0" (
+    echo.
+    echo  [!] winget غير متاح على هذه النسخة من ويندوز.
+    echo      الحل: شغّل هذا الملف مرة أخرى بعد تشغيل Windows Update،
+    echo      أو ثبّت "App Installer" من متجر مايكروسوفت ثم أعد المحاولة.
+    echo      ملاحظة: يتم الآن محاولة التنزيل المباشر من المصادر الرسمية.
+    echo.
+)
+
+
 :menu
 cls
 echo ==============================================================================
@@ -105,10 +118,41 @@ echo قلّل الدقة إلى 1280x720 للحصول على أعلى إطارا
 pause
 goto menu
 
+:direct
+rem ============================================================
+rem  direct-download fallback (used only when winget is missing)
+rem ============================================================
+set "DL=%TEMP%\m11_dl_setup"
+set "EXT=exe"
+set "URL="
+if /i "%~1"=="Valve.Steam"                 set "URL=https://cdn.fastly.steamstatic.com/client/installer/SteamSetup.exe"
+if /i "%~1"=="EpicGames.EpicGamesLauncher" set "URL=https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/installer/download/EpicGamesLauncherInstaller.msi" & set "EXT=msi"
+if /i "%~1"=="RockstarGames.Launcher"      set "URL=https://gamedownloads.rockstargames.com/public/installer/Rockstar-Games-Launcher.exe"
+if /i "%~1"=="Ubisoft.Connect"             set "URL=https://ubistatic3-a.akamaihd.net/orbit/launcher_installer/UbisoftConnectInstaller.exe"
+if not defined URL (
+    echo [!] لا يوجد رابط مباشر لهذا العنصر بدون winget: %~1
+    echo     ثبّت App Installer من متجر مايكروسوفت ثم أعد المحاولة.
+    exit /b 1
+)
+set "DL=%DL%.%EXT%"
+echo      [direct] تنزيل مباشر: %~1
+curl -sL --retry 3 --max-time 1200 -o "%DL%" "%URL%"
+if not exist "%DL%" (
+    echo [!] فشل التنزيل المباشر لـ %~1
+    exit /b 1
+)
+if /i "%EXT%"=="msi" (
+    msiexec /i "%DL%" /qn /norestart
+) else (
+    start "" /wait "%DL%"
+)
+echo [OK] تم التثبيت المباشر: %~1
+exit /b 0
+
 :install
 echo.
 echo [INSTALL] %~2 ...
-winget install --id %~1 -e --silent --accept-package-agreements --accept-source-agreements
+if "%WG_OK%"=="0" ( "%M11_WINGET%" install --id %~1 -e --silent --accept-package-agreements --accept-source-agreements ) else ( call :direct %~1 )
 if errorlevel 1 (
     echo [!] فشل التثبيت عبر winget: %~1
     echo     جرّب لاحقًا: winget install --id %~1 -e
