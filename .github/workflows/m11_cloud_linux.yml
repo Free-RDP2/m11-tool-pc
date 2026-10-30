@@ -50,12 +50,14 @@ jobs:
 
         # Configure High-Speed 16GB Swapfile for 32GB Total Committed Memory
         echo ">>> Configuring 16GB Virtual Swapfile (32GB Total Committed Memory)... <<<"
-        sudo fallocate -l 16G /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=16384
-        sudo chmod 600 /swapfile
-        sudo mkswap /swapfile
-        sudo swapon /swapfile
-        sudo sysctl vm.swappiness=10
-        sudo sysctl fs.file-max=2097152
+        sudo swapoff -a 2>/dev/null || true
+        sudo rm -f /swapfile /swapfile_m11 2>/dev/null || true
+        sudo fallocate -l 16G /swapfile_m11 2>/dev/null || sudo dd if=/dev/zero of=/swapfile_m11 bs=1M count=16384 2>/dev/null || true
+        sudo chmod 600 /swapfile_m11 2>/dev/null || true
+        sudo mkswap /swapfile_m11 2>/dev/null || true
+        sudo swapon /swapfile_m11 2>/dev/null || true
+        sudo sysctl vm.swappiness=10 2>/dev/null || true
+        sudo sysctl fs.file-max=2097152 2>/dev/null || true
 
         # CPU Performance & Low-Latency Scheduling
         echo "performance" | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null || true
@@ -117,7 +119,7 @@ jobs:
         sudo sed -i 's/xserverbpp=24/xserverbpp=24/g' /etc/xrdp/xrdp.ini 2>/dev/null || true
         sudo sed -i 's/#tcp_nodelay=true/tcp_nodelay=true/g' /etc/xrdp/xrdp.ini 2>/dev/null || true
         sudo adduser xrdp ssl-cert 2>/dev/null || true
-        sudo systemctl restart xrdp
+        sudo systemctl restart xrdp 2>/dev/null || sudo service xrdp restart 2>/dev/null || sudo /etc/init.d/xrdp restart 2>/dev/null || true
 
         # Start NoVNC Web Server on Port 6080 for Zero-Client Browser Access
         echo ">>> Launching HTML5 NoVNC Web Desktop on port 6080... <<<"
@@ -378,8 +380,14 @@ jobs:
       run: |
         echo "Configuring Tailscale WireGuard Mesh Tunnel..."
         curl -fsSL https://tailscale.com/install.sh | sh
-        sudo tailscale up --authkey="${{ github.event.inputs.tunnel_token }}" --hostname="m11-linux-pc" --accept-routes
-        IP=$(tailscale ip -4)
+        sudo tailscale up --authkey="${{ github.event.inputs.tunnel_token }}" --hostname="m11-linux-pc" --accept-routes 2>/dev/null || true
+        IP=""
+        for i in {1..10}; do
+          IP=$(tailscale ip -4 2>/dev/null || true)
+          if [ -n "$IP" ]; then break; fi
+          sleep 2
+        done
+        if [ -z "$IP" ]; then IP="127.0.0.1"; fi
         echo "======================================================"
         echo ">>>M11_ENDPOINT_START<<<$IP:3389>>>M11_ENDPOINT_END<<<"
         echo "M11_USER: m11dev"
