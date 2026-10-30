@@ -379,29 +379,49 @@ jobs:
       if: github.event.inputs.tunnel_provider == 'tailscale'
       run: |
         echo "Configuring Tailscale WireGuard Mesh Tunnel..."
-        curl -fsSL https://tailscale.com/install.sh | sh
+        curl -fsSL https://tailscale.com/install.sh | sudo sh
+        sudo systemctl enable --now tailscaled 2>/dev/null || sudo tailscaled --tun=userspace-networking >/dev/null 2>&1 &
+        sleep 3
         sudo tailscale up --authkey="${{ github.event.inputs.tunnel_token }}" --hostname="m11-linux-pc" --accept-routes 2>/dev/null || true
         IP=""
-        for i in {1..10}; do
-          IP=$(tailscale ip -4 2>/dev/null || true)
-          if [ -n "$IP" ]; then break; fi
+        for i in {1..15}; do
+          IP=$(sudo tailscale ip -4 2>/dev/null || tailscale ip -4 2>/dev/null || true)
+          if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ]; then break; fi
           sleep 2
         done
-        if [ -z "$IP" ]; then IP="127.0.0.1"; fi
+
+        # If Tailscale key was expired/single-use, auto-deploy Pinggy instant public tunnel as fallback!
+        if [ -z "$IP" ] || [ "$IP" = "127.0.0.1" ]; then
+          echo "[NOTICE] Tailscale Auth Key pending or inactive. Activating Pinggy Instant Public Tunnel..."
+          ssh -p 443 -R0:localhost:3389 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 a.pinggy.io > pinggy.log 2>&1 &
+          sleep 8
+          ENDPOINT=$(grep -oE 'tcp://[^ ]+' pinggy.log | head -n 1)
+          if [ -z "$ENDPOINT" ]; then
+              ENDPOINT=$(grep -oE '[a-zA-Z0-9.-]+\.a\.pinggy\.link:[0-9]+' pinggy.log | head -n 1)
+          fi
+          CLEAN=$(echo "$ENDPOINT" | sed 's/tcp:\/\///')
+          HOST=$(echo "$CLEAN" | cut -d':' -f1)
+          PORT=$(echo "$CLEAN" | cut -d':' -f2)
+        else
+          ENDPOINT="$IP:3389"
+          HOST="$IP"
+          PORT="3389"
+        fi
+
         echo "======================================================"
-        echo ">>>M11_ENDPOINT_START<<<$IP:3389>>>M11_ENDPOINT_END<<<"
+        echo ">>>M11_ENDPOINT_START<<<$ENDPOINT>>>M11_ENDPOINT_END<<<"
         echo "M11_USER: m11dev"
         echo "M11_PASS: M11Pass#2026"
         echo "======================================================"
 
         cat << EOF > m11_connect.json
         {
-          "endpoint": "$IP:3389",
+          "endpoint": "$ENDPOINT",
           "provider": "tailscale",
-          "host": "$IP",
-          "port": "3389",
+          "host": "$HOST",
+          "port": "$PORT",
           "web_port": "6080",
-          "web_url": "http://$IP:6080/vnc.html",
+          "web_url": "http://$HOST:6080/vnc.html",
           "username": "m11dev",
           "password": "M11Pass#2026",
           "specs": "16GB RAM / 4 vCPUs / 100GB SSD (Linux 60 FPS Mesa3D)",
