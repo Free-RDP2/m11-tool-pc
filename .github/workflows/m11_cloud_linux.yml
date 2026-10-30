@@ -134,7 +134,7 @@ jobs:
         REPO="${{ github.repository }}"
         ENABLE_PERSIST="${{ github.event.inputs.enable_persistence }}"
 
-        mkdir -p /home/m11dev/Desktop /home/m11dev/Documents /home/m11dev/Downloads /home/m11dev/.config
+        sudo mkdir -p /home/m11dev/Desktop /home/m11dev/Documents /home/m11dev/Downloads /home/m11dev/.config
         sudo chown -R m11dev:m11dev /home/m11dev
 
         if [ "$ENABLE_PERSIST" = "true" ]; then
@@ -146,7 +146,7 @@ jobs:
               echo "Downloading persistent cloud state from GitHub..."
               curl -sL -H "Authorization: Bearer $TOKEN" "$DOWNLOAD_URL" -o /tmp/cloud_state.tar.gz
               if [ -s /tmp/cloud_state.tar.gz ]; then
-                tar -xzf /tmp/cloud_state.tar.gz -C /home/m11dev/ 2>/dev/null || true
+                sudo tar -xzf /tmp/cloud_state.tar.gz -C /home/m11dev/ 2>/dev/null || true
                 sudo chown -R m11dev:m11dev /home/m11dev
                 echo "Cloud state successfully restored! Desktop, game configs & files ready."
               fi
@@ -511,7 +511,7 @@ jobs:
             LAST_BACKUP=$ELAPSED
             echo "Continuous State Sync: Preserving user files to Cloud..."
             if [ -d "/home/m11dev/Desktop" ] || [ -d "/home/m11dev/Documents" ]; then
-              tar -czf /tmp/cloud_state.tar.gz -C /home/m11dev Desktop Documents Downloads .config/Roblox 2>/dev/null || true
+              sudo tar -czf /tmp/cloud_state.tar.gz -C /home/m11dev Desktop Documents Downloads .config/Roblox 2>/dev/null || true
               if [ -s /tmp/cloud_state.tar.gz ]; then
                 B64=$(base64 -w 0 /tmp/cloud_state.tar.gz)
                 CHECK_URL="https://api.github.com/repos/$REPO/contents/cloud_state.tar.gz"
@@ -533,7 +533,7 @@ jobs:
           if [ "$ELAPSED" -ge 20400 ] && [ "$CHAIN_TRIGGERED" = "false" ]; then
             CHAIN_TRIGGERED=true
             echo "SESSION CHAINING: 20 minutes remaining! Dispatching next Cloud PC runner..."
-            tar -czf /tmp/cloud_state.tar.gz -C /home/m11dev Desktop Documents Downloads 2>/dev/null || true
+            sudo tar -czf /tmp/cloud_state.tar.gz -C /home/m11dev Desktop Documents Downloads 2>/dev/null || true
             B64=$(base64 -w 0 /tmp/cloud_state.tar.gz)
             CHECK_URL="https://api.github.com/repos/$REPO/contents/cloud_state.tar.gz"
             SHA=$(curl -s -H "Authorization: Bearer $TOKEN" "$CHECK_URL" | jq -r '.sha // empty')
