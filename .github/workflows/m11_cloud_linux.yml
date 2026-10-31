@@ -79,7 +79,7 @@ jobs:
         sudo apt-get update -qq
         sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
           xfce4 xfce4-goodies xfce4-terminal \
-          xrdp xorgxrdp xorg xserver-xorg-core xinit tigervnc-standalone-server xvfb \
+          xrdp xorgxrdp xorg xserver-xorg-core xserver-xorg-legacy xserver-xorg-video-dummy xinit tigervnc-standalone-server xvfb \
           dbus-x11 x11vnc novnc websockify \
           mesa-utils mesa-va-drivers mesa-vulkan-drivers libgl1-mesa-dri \
           pulseaudio pavucontrol \
@@ -99,15 +99,38 @@ jobs:
         sudo adduser m11dev ssl-cert 2>/dev/null || true
         sudo adduser xrdp shadow 2>/dev/null || true
 
-        # Allow non-console users to start X server via Xorg
+        # Clean X11 socket directory
+        sudo mkdir -p /tmp/.X11-unix
+        sudo chmod 1777 /tmp/.X11-unix
+
+        # Allow non-console users to start X server via Xorg.wrap
         sudo bash -c 'cat > /etc/X11/Xwrapper.config << "EOF"
         allowed_users=anybody
-        needs_root_rights=no
+        needs_root_rights=yes
         EOF'
 
         # Configure sesman permissions & security
         sudo sed -i 's/TerminalServerUsers=tsusers/TerminalServerUsers=/g' /etc/xrdp/sesman.ini 2>/dev/null || true
         sudo sed -i 's/AlwaysGroupCheck=true/AlwaysGroupCheck=false/g' /etc/xrdp/sesman.ini 2>/dev/null || true
+        sudo sed -i 's/param=\/usr\/lib\/xorg\/Xorg/param=\/usr\/bin\/Xorg/g' /etc/xrdp/sesman.ini 2>/dev/null || true
+
+        # Reorder xrdp.ini so Xvnc is primary session and prefill m11dev username
+        sudo python3 -c '
+        with open("/etc/xrdp/xrdp.ini", "r") as f:
+            x = f.read()
+        if "[Xorg]\nname=Xorg" in x and "[Xvnc]\nname=Xvnc" in x:
+            org_start = x.find("[Xorg]")
+            vnc_start = x.find("[Xvnc]")
+            vnc_end = x.find("\n\n[", vnc_start)
+            if vnc_end == -1: vnc_end = len(x)
+            org_block = x[org_start:vnc_start].strip().replace("username=ask", "username=m11dev")
+            vnc_block = x[vnc_start:vnc_end].strip().replace("username=ask", "username=m11dev")
+            combined = vnc_block + "\n\n" + org_block
+            x = x[:org_start] + combined + x[vnc_end:]
+        x = x.replace("max_bpp=32", "max_bpp=24").replace("xserverbpp=24", "xserverbpp=24")
+        with open("/etc/xrdp/xrdp.ini", "w") as f:
+            f.write(x)
+        '
 
         # Configure Polkit rules to eliminate annoying authentication popups
         sudo mkdir -p /etc/polkit-1/localauthority/50-local.d
@@ -169,13 +192,8 @@ jobs:
         setxkbmap -layout us,ara -option grp:alt_shift_toggle &
         pulseaudio --start --exit-idle-time=-1 &
         EOF'
-        sudo chown m11dev:m11dev /home/m11dev/.xprofile
-        sudo chmod +x /home/m11dev/.xprofile
-
-        # Optimize XRDP Configuration for High FPS & Zero Latency
-        sudo sed -i 's/max_bpp=32/max_bpp=24/g' /etc/xrdp/xrdp.ini 2>/dev/null || true
-        sudo sed -i 's/xserverbpp=24/xserverbpp=24/g' /etc/xrdp/xrdp.ini 2>/dev/null || true
-        sudo sed -i 's/#tcp_nodelay=true/tcp_nodelay=true/g' /etc/xrdp/xrdp.ini 2>/dev/null || true
+        sudo chown -R m11dev:m11dev /home/m11dev
+        sudo chmod 755 /home/m11dev
 
         # Cleanly restart XRDP services
         sudo systemctl restart xrdp xrdp-sesman 2>/dev/null || sudo service xrdp restart 2>/dev/null || true
