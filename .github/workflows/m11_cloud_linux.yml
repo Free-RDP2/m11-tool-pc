@@ -182,10 +182,6 @@ jobs:
         sudo chown m11dev:m11dev /home/m11dev/.xsession
         sudo chmod +x /home/m11dev/.xsession
 
-        exec startxfce4
-        EOF'
-        sudo chmod +x /etc/xrdp/startwm.sh
-
         # Configure Bilingual Keyboard: English (US) + Arabic (Egypt) with Alt+Shift Toggle
         sudo bash -c 'cat > /etc/default/keyboard << "EOF"
         XKBMODEL="pc105"
