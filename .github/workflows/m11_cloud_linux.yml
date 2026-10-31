@@ -382,30 +382,39 @@ jobs:
         curl -fsSL https://tailscale.com/install.sh | sudo sh
         sudo systemctl enable --now tailscaled 2>/dev/null || sudo tailscaled --tun=userspace-networking >/dev/null 2>&1 &
         sleep 3
-        sudo tailscale up --authkey="${{ github.event.inputs.tunnel_token }}" --hostname="m11-linux-pc" --accept-routes 2>/dev/null || true
+        # Strict 15s timeout prevents hanging indefinitely on expired or single-use auth keys
+        timeout 15s sudo tailscale up --authkey="${{ github.event.inputs.tunnel_token }}" --hostname="m11-linux-pc" --accept-routes --timeout=10s 2>/dev/null || true
         IP=""
-        for i in {1..15}; do
+        for i in {1..8}; do
           IP=$(sudo tailscale ip -4 2>/dev/null || tailscale ip -4 2>/dev/null || true)
           if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ]; then break; fi
-          sleep 2
+          sleep 1
         done
 
-        # If Tailscale key was expired/single-use, auto-deploy Pinggy instant public tunnel as fallback!
+        # If Tailscale key was expired/single-use or pending, auto-deploy Pinggy instant public tunnel as fallback!
         if [ -z "$IP" ] || [ "$IP" = "127.0.0.1" ]; then
-          echo "[NOTICE] Tailscale Auth Key pending or inactive. Activating Pinggy Instant Public Tunnel..."
-          ssh -p 443 -R0:localhost:3389 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 a.pinggy.io > pinggy.log 2>&1 &
+          echo "[NOTICE] Tailscale Auth Key inactive or single-use. Activating Pinggy Instant Public Tunnel fallback..."
+          ssh -p 443 -R0:localhost:3389 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -T a.pinggy.io > /tmp/pinggy_rdp.log 2>&1 &
+          ssh -p 443 -R0:localhost:6080 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -T a.pinggy.io > /tmp/pinggy_web.log 2>&1 &
           sleep 8
-          ENDPOINT=$(grep -oE 'tcp://[^ ]+' pinggy.log | head -n 1)
+          ENDPOINT=$(grep -oE 'tcp://[^ ]+' /tmp/pinggy_rdp.log | head -n 1)
           if [ -z "$ENDPOINT" ]; then
-              ENDPOINT=$(grep -oE '[a-zA-Z0-9.-]+\.a\.pinggy\.link:[0-9]+' pinggy.log | head -n 1)
+              ENDPOINT=$(grep -oE '[a-zA-Z0-9.-]+\.a\.pinggy\.link:[0-9]+' /tmp/pinggy_rdp.log | head -n 1)
           fi
+          WEB_HOST=$(grep -oE 'https://[a-zA-Z0-9.-]+\.a\.pinggy\.link' /tmp/pinggy_web.log | head -n 1)
           CLEAN=$(echo "$ENDPOINT" | sed 's/tcp:\/\///')
           HOST=$(echo "$CLEAN" | cut -d':' -f1)
           PORT=$(echo "$CLEAN" | cut -d':' -f2)
+          if [ -n "$WEB_HOST" ]; then
+            WEB_URL="${WEB_HOST}/vnc.html"
+          else
+            WEB_URL="http://${HOST}:6080/vnc.html"
+          fi
         else
           ENDPOINT="$IP:3389"
           HOST="$IP"
           PORT="3389"
+          WEB_URL="http://$HOST:6080/vnc.html"
         fi
 
         echo "======================================================"
@@ -421,7 +430,7 @@ jobs:
           "host": "$HOST",
           "port": "$PORT",
           "web_port": "6080",
-          "web_url": "http://$HOST:6080/vnc.html",
+          "web_url": "$WEB_URL",
           "username": "m11dev",
           "password": "M11Pass#2026",
           "specs": "16GB RAM / 4 vCPUs / 100GB SSD (Linux 60 FPS Mesa3D)",
@@ -434,21 +443,33 @@ jobs:
       run: |
         echo "Launching Pinggy Direct Public Tunnel..."
         TOKEN="${{ github.event.inputs.tunnel_token }}"
-        SSH_CMD="ssh -p 443 -R0:localhost:3389 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 a.pinggy.io"
+        SSH_TARGET="a.pinggy.io"
         if [ -n "$TOKEN" ]; then
-            SSH_CMD="ssh -p 443 -R0:localhost:3389 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 ${TOKEN}@a.pinggy.io"
+            SSH_TARGET="${TOKEN}@a.pinggy.io"
         fi
-        $SSH_CMD > pinggy.log 2>&1 &
+        ssh -p 443 -R0:localhost:3389 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -T $SSH_TARGET > /tmp/pinggy_rdp.log 2>&1 &
+        ssh -p 443 -R0:localhost:6080 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -T $SSH_TARGET > /tmp/pinggy_web.log 2>&1 &
         sleep 8
 
-        ENDPOINT=$(grep -oE 'tcp://[^ ]+' pinggy.log | head -n 1)
+        ENDPOINT=$(grep -oE 'tcp://[^ ]+' /tmp/pinggy_rdp.log | head -n 1)
         if [ -z "$ENDPOINT" ]; then
-            ENDPOINT=$(grep -oE '[a-zA-Z0-9.-]+\.a\.pinggy\.link:[0-9]+' pinggy.log | head -n 1)
+            ENDPOINT=$(grep -oE '[a-zA-Z0-9.-]+\.a\.pinggy\.link:[0-9]+' /tmp/pinggy_rdp.log | head -n 1)
         fi
-        echo ">>>M11_ENDPOINT_START<<<$ENDPOINT>>>M11_ENDPOINT_END<<<"
+        WEB_HOST=$(grep -oE 'https://[a-zA-Z0-9.-]+\.a\.pinggy\.link' /tmp/pinggy_web.log | head -n 1)
         CLEAN=$(echo "$ENDPOINT" | sed 's/tcp:\/\///')
         HOST=$(echo "$CLEAN" | cut -d':' -f1)
         PORT=$(echo "$CLEAN" | cut -d':' -f2)
+        if [ -n "$WEB_HOST" ]; then
+          WEB_URL="${WEB_HOST}/vnc.html"
+        else
+          WEB_URL="http://${HOST}:6080/vnc.html"
+        fi
+
+        echo "======================================================"
+        echo ">>>M11_ENDPOINT_START<<<$ENDPOINT>>>M11_ENDPOINT_END<<<"
+        echo "M11_USER: m11dev"
+        echo "M11_PASS: M11Pass#2026"
+        echo "======================================================"
 
         cat << EOF > m11_connect.json
         {
@@ -457,7 +478,7 @@ jobs:
           "host": "$HOST",
           "port": "$PORT",
           "web_port": "6080",
-          "web_url": "http://$HOST:6080/vnc.html",
+          "web_url": "$WEB_URL",
           "username": "m11dev",
           "password": "M11Pass#2026",
           "specs": "16GB RAM / 4 vCPUs / 100GB SSD (Linux 60 FPS Mesa3D)",
