@@ -106,7 +106,7 @@ jobs:
         # Allow non-console users to start X server via Xorg.wrap
         sudo bash -c 'cat > /etc/X11/Xwrapper.config << "EOF"
         allowed_users=anybody
-        needs_root_rights=yes
+        needs_root_rights=no
         EOF'
 
         # Configure sesman permissions & security
@@ -150,18 +150,7 @@ jobs:
         ResultActive=yes
         EOF'
 
-        # Configure XFCE Session for XRDP
-        sudo bash -c 'cat > /home/m11dev/.xsession << "EOF"
-        unset DBUS_SESSION_BUS_ADDRESS
-        unset SESSION_MANAGER
-        export XDG_CURRENT_DESKTOP="XFCE"
-        export XDG_SESSION_DESKTOP="xfce"
-        exec startxfce4
-        EOF'
-        sudo chown m11dev:m11dev /home/m11dev/.xsession
-        sudo chmod +x /home/m11dev/.xsession
-
-        # Ensure startwm.sh launches XFCE cleanly
+        # Configure startwm.sh to cleanly launch XFCE4 via dbus-run-session
         sudo bash -c 'cat > /etc/xrdp/startwm.sh << "EOF"
         #!/bin/sh
         if [ -r /etc/default/locale ]; then
@@ -173,6 +162,23 @@ jobs:
         unset SESSION_MANAGER
         export XDG_CURRENT_DESKTOP="XFCE"
         export XDG_SESSION_DESKTOP="xfce"
+
+        exec dbus-run-session -- xfce4-session
+        EOF'
+        sudo chmod +x /etc/xrdp/startwm.sh
+
+        # Configure User XFCE Session scripts
+        sudo bash -c 'cat > /home/m11dev/.xsession << "EOF"
+        #!/bin/sh
+        unset DBUS_SESSION_BUS_ADDRESS
+        unset SESSION_MANAGER
+        export XDG_CURRENT_DESKTOP="XFCE"
+        export XDG_SESSION_DESKTOP="xfce"
+
+        exec dbus-run-session -- xfce4-session
+        EOF'
+        sudo chown m11dev:m11dev /home/m11dev/.xsession
+        sudo chmod +x /home/m11dev/.xsession
 
         exec startxfce4
         EOF'
