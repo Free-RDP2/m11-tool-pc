@@ -150,7 +150,7 @@ jobs:
         ResultActive=yes
         EOF'
 
-        # Configure startwm.sh to cleanly launch XFCE4 via dbus-run-session
+        # Configure startwm.sh to cleanly launch XFCE4 with complete XDG & D-Bus environment
         sudo bash -c 'cat > /etc/xrdp/startwm.sh << "EOF"
         #!/bin/sh
         if [ -r /etc/default/locale ]; then
@@ -161,26 +161,45 @@ jobs:
         unset DBUS_SESSION_BUS_ADDRESS
         unset XDG_RUNTIME_DIR
         unset SESSION_MANAGER
+
+        export XDG_CONFIG_DIRS="/etc/xdg"
+        export XDG_DATA_DIRS="/usr/share/xfce4:/usr/local/share:/usr/share"
+        export XDG_CONFIG_HOME="$HOME/.config"
+        export XDG_CACHE_HOME="$HOME/.cache"
+        export XDG_DATA_HOME="$HOME/.local/share"
         export XDG_CURRENT_DESKTOP="XFCE"
         export XDG_SESSION_DESKTOP="xfce"
+        export DESKTOP_SESSION="xfce"
+        export XDG_MENU_PREFIX="xfce-"
 
-        exec dbus-run-session -- xfce4-session
+        mkdir -p "$HOME/.config/xfce4" "$HOME/.cache/sessions" "$HOME/.local/share" "$HOME/Desktop" 2>/dev/null || true
+
+        if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+          eval $(dbus-launch --sh-syntax --exit-with-session)
+        fi
+
+        if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+          dbus-update-activation-environment --systemd --all 2>/dev/null || dbus-update-activation-environment --all 2>/dev/null || true
+        fi
+
+        if [ -x /usr/lib/x86_64-linux-gnu/xfce4/xfconf/xfconfd ]; then
+          /usr/lib/x86_64-linux-gnu/xfce4/xfconf/xfconfd &
+        elif [ -x /usr/lib/xfce4/xfconf/xfconfd ]; then
+          /usr/lib/xfce4/xfconf/xfconfd &
+        fi
+
+        setxkbmap -layout us,ara -option grp:alt_shift_toggle 2>/dev/null || true
+        pulseaudio --start --exit-idle-time=-1 2>/dev/null || true
+
+        exec xfce4-session
         EOF'
-        sudo chmod +x /etc/xrdp/startwm.sh
+        sudo chmod 755 /etc/xrdp/startwm.sh
 
-        # Configure User XFCE Session scripts
-        sudo bash -c 'cat > /home/m11dev/.xsession << "EOF"
-        #!/bin/sh
-        unset DBUS_SESSION_BUS_ADDRESS
-        unset XDG_RUNTIME_DIR
-        unset SESSION_MANAGER
-        export XDG_CURRENT_DESKTOP="XFCE"
-        export XDG_SESSION_DESKTOP="xfce"
-
-        exec dbus-run-session -- xfce4-session
-        EOF'
-        sudo chown m11dev:m11dev /home/m11dev/.xsession
-        sudo chmod +x /home/m11dev/.xsession
+        # Replicate startwm.sh into user .xsession and .xsessionrc
+        sudo cp /etc/xrdp/startwm.sh /home/m11dev/.xsession
+        sudo cp /etc/xrdp/startwm.sh /home/m11dev/.xsessionrc
+        sudo chown m11dev:m11dev /home/m11dev/.xsession /home/m11dev/.xsessionrc
+        sudo chmod 755 /home/m11dev/.xsession /home/m11dev/.xsessionrc
 
         # Configure Bilingual Keyboard: English (US) + Arabic (Egypt) with Alt+Shift Toggle
         sudo bash -c 'cat > /etc/default/keyboard << "EOF"
@@ -453,7 +472,9 @@ jobs:
         Categories=System;Game;
         EOF'
         sudo chmod +x /home/m11dev/Desktop/M11_Master_Control_Center.desktop
-        sudo chown -R m11dev:m11dev /home/m11dev/Desktop
+        sudo chown -R m11dev:m11dev /home/m11dev
+        sudo chmod 755 /home/m11dev
+        sudo chmod -R u+rwX /home/m11dev
         echo "M11 Master Control Center deployed on Desktop successfully!"
     - name: 6A. Setup Tailscale WireGuard Tunnel (Zero Credit Card)
       if: github.event.inputs.tunnel_provider == 'tailscale'
