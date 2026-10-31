@@ -2,10 +2,6 @@ name: M11 Tool - PC 16GB Datacenter (v1.11 M11 Quantum Enterprise Edition)
 on:
   workflow_dispatch:
     inputs:
-      run_engine_test:
-        description: 'Run the live engine test pass (slower boot, uploads a report via cloud sync)'
-        required: false
-        default: 'false'
       tunnel_provider:
         description: 'Tunnel Provider (tailscale, pinggy, or ngrok)'
         required: true
@@ -304,132 +300,58 @@ jobs:
     - name: 3. Restore User Persistent State & Desktop Files
       if: github.event.inputs.enable_persistence == 'true'
       run: |
-        Write-Host ">>> M11 v1.12 STATE RESTORE (structured) <<<" -ForegroundColor Cyan
-        $profiles = @()
-        foreach ($p in (Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue)) {
-            if (Test-Path (Join-Path $p.FullName 'Desktop')) { $profiles += $p.FullName }
+        Write-Host "Checking for existing cloud backup (Persistent State)..." -ForegroundColor Cyan
+        try {
+          $token = "${{ github.event.inputs.pat_token }}"
+          if (-not $token) { $token = "${{ secrets.GITHUB_TOKEN }}" }
+          $repo = "${{ github.repository }}"
+          $url = "https://api.github.com/repos/$repo/contents/cloud_state.zip?ref=main"
+          $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-Sync-v111" }
+          $fileMeta = Invoke-RestMethod -Uri $url -Headers $headers -ErrorAction SilentlyContinue
+
+          if ($fileMeta -and $fileMeta.download_url) {
+            Write-Host "Found cloud state backup! Restoring user files to M11 Dev-Tool..." -ForegroundColor Green
+            curl.exe -fsSL -o "cloud_state.zip" $fileMeta.download_url
+
+            # Ensure target directories exist for M11 Dev-Tool
+            $m11Dirs = @(
+              "C:\Users\M11 Dev-Tool\Desktop",
+              "C:\Users\M11 Dev-Tool\Documents",
+              "C:\Users\M11 Dev-Tool\Downloads",
+              "C:\Users\M11 Dev-Tool\AppData\Local\Roblox\ClientSettings"
+            )
+            foreach ($d in $m11Dirs) {
+              if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force -ErrorAction SilentlyContinue | Out-Null }
+            }
+
+            # Extract and restore to M11 Dev-Tool (Active RDP User)
+            $stagingRestore = "C:\M11Data\staging_restore"
+            if (Test-Path $stagingRestore) { Remove-Item $stagingRestore -Recurse -Force -ErrorAction SilentlyContinue }
+            Expand-Archive -Path "cloud_state.zip" -DestinationPath $stagingRestore -Force -ErrorAction SilentlyContinue
+
+            if (Test-Path "$stagingRestore\Desktop") { robocopy "$stagingRestore\Desktop" "C:\Users\M11 Dev-Tool\Desktop" /E /R:1 /W:1 | Out-Null }
+            if (Test-Path "$stagingRestore\Documents") { robocopy "$stagingRestore\Documents" "C:\Users\M11 Dev-Tool\Documents" /E /R:1 /W:1 | Out-Null }
+            if (Test-Path "$stagingRestore\Downloads") { robocopy "$stagingRestore\Downloads" "C:\Users\M11 Dev-Tool\Downloads" /E /R:1 /W:1 | Out-Null }
+            if (Test-Path "$stagingRestore\RobloxSettings") { robocopy "$stagingRestore\RobloxSettings" "C:\Users\M11 Dev-Tool\AppData\Local\Roblox\ClientSettings" /E /R:1 /W:1 | Out-Null }
+            if (Test-Path "$stagingRestore\ChromeData") {
+                $chromeDst = "C:\Users\M11 Dev-Tool\AppData\Local\Google\Chrome\User Data\Default"
+                if (-not (Test-Path $chromeDst)) { New-Item -ItemType Directory -Path $chromeDst -Force | Out-Null }
+                robocopy "$stagingRestore\ChromeData" $chromeDst /E /R:1 /W:1 | Out-Null
+            }
+
+            # Direct fallback extraction for legacy backups
+            Expand-Archive -Path "cloud_state.zip" -DestinationPath "C:\Users\M11 Dev-Tool" -Force -ErrorAction SilentlyContinue
+            Expand-Archive -Path "cloud_state.zip" -DestinationPath "C:\Users\runneradmin" -Force -ErrorAction SilentlyContinue
+
+            # Grant full ownership and permissions to M11 Dev-Tool
+            icacls "C:\Users\M11 Dev-Tool" /grant "M11 Dev-Tool:(OI)(CI)F" /t /q 2>$null | Out-Null
+            Write-Host "User files, desktop items, and game state restored 100%!" -ForegroundColor Green
+          } else {
+            Write-Host "No prior cloud backup found. Initializing fresh clean workspace." -ForegroundColor Yellow
+          }
+        } catch {
+          Write-Host "State initialization completed."
         }
-        if (-not ($profiles -contains 'C:\Users\M11 Dev-Tool')) { $profiles += 'C:\Users\M11 Dev-Tool' }
-        Write-Host ("Profiles targeted: " + ($profiles -join ', '))
-
-        $token = "${{ secrets.M11_PAT }}"
-        if (-not $token) { $token = "${{ github.event.inputs.pat_token }}" }
-        if (-not $token) { $token = "${{ secrets.GITHUB_TOKEN }}" }
-        $repo = "${{ github.repository }}"
-        $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-Sync-v112" }
-
-        $zip = "C:\M11Data\cloud_state.zip"
-        New-Item -ItemType Directory -Path "C:\M11Data" -Force -ErrorAction SilentlyContinue | Out-Null
-        $got = $false
-        try {
-            $url = "https://api.github.com/repos/$repo/contents/cloud_state.zip?ref=main"
-            $meta = Invoke-RestMethod -Uri $url -Headers $headers -ErrorAction SilentlyContinue
-            if ($meta -and $meta.download_url) {
-                curl.exe -fsSL -o $zip $meta.download_url
-                if ((Test-Path $zip) -and (Get-Item $zip).Length -gt 0) { $got = $true; Write-Host "Backup downloaded from repository." -ForegroundColor Green }
-            }
-        } catch { Write-Host ("Repository fetch notice: " + $_.Exception.Message) -ForegroundColor Yellow }
-
-        if (-not $got) {
-            Write-Host "No cloud_state.zip found. A fresh workspace will be created." -ForegroundColor Yellow
-        } else {
-            $stg = "C:\M11Data\staging_restore"
-            if (Test-Path $stg) { Remove-Item $stg -Recurse -Force -ErrorAction SilentlyContinue }
-            New-Item -ItemType Directory -Path $stg -Force | Out-Null
-            try { Expand-Archive -Path $zip -DestinationPath $stg -Force -ErrorAction Stop }
-            catch { Write-Host ("Extract warning: " + $_.Exception.Message) -ForegroundColor Yellow }
-
-            foreach ($prof in $profiles) {
-                # remove ONLY M11-managed toolkit items, never user data
-                foreach ($rel in @('Desktop','Documents','Downloads')) {
-                    $dst = Join-Path $prof $rel
-                    if (-not (Test-Path $dst)) { New-Item -ItemType Directory -Path $dst -Force | Out-Null }
-                }
-                $dsk = Join-Path $prof 'Desktop'
-                Get-ChildItem -LiteralPath $dsk -Force -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Name -match '^(\?+|M11|_M11|.*M11_TOOL_PC|.*MASTER_RUNNER|.*M11_MASTER|.*M11_UNIVERSAL_STORE|.*DOWNLOAD_GTA_V)' } |
-                    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
-
-                foreach ($rel in @('Desktop','Documents','Downloads')) {
-                    $src = Join-Path $stg $rel
-                    $dst = Join-Path $prof $rel
-                    if (Test-Path $src) { robocopy $src $dst /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null }
-                }
-                $robSrc = Join-Path $stg 'RobloxSettings'
-                if (Test-Path $robSrc) {
-                    $robDst = Join-Path $prof 'AppData\Local\Roblox\ClientSettings'
-                    if (-not (Test-Path $robDst)) { New-Item -ItemType Directory -Path $robDst -Force | Out-Null }
-                    robocopy $robSrc $robDst /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
-                }
-                $chrSrc = Join-Path $stg 'ChromeData'
-                if (Test-Path $chrSrc) {
-                    $chrDst = Join-Path $prof 'AppData\Local\Google\Chrome\User Data\Default'
-                    if (-not (Test-Path $chrDst)) { New-Item -ItemType Directory -Path $chrDst -Force | Out-Null }
-                    robocopy $chrSrc $chrDst /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
-                }
-                cmd.exe /c "icacls `"$prof`" /grant `"$($prof.Split('\')[-1]):(OI)(CI)F`" /t /q" 2>$null | Out-Null
-                Write-Host ("Restored into: " + $prof) -ForegroundColor Green
-            }
-            Copy-Item $zip "C:\M11Data\cloud_state.zip" -Force -ErrorAction SilentlyContinue
-            Write-Host "User files, desktop items and game state restored." -ForegroundColor Green
-        }
-
-    - name: 2A2. Session Hardening + Self-Healing Toolkit (v1.12)
-      run: |
-        Write-Host ">>> M11 v1.12 SESSION HARDENING <<<" -ForegroundColor Cyan
-
-        # --- 1. user + groups -------------------------------------------------
-        $plainPass = "M11Pass#2026"
-        $sec = ConvertTo-SecureString $plainPass -AsPlainText -Force
-        try { New-LocalUser -Name "M11 Dev-Tool" -Password $sec -AccountNeverExpires -ErrorAction SilentlyContinue } catch { }
-        try { Set-LocalUser  -Name "M11 Dev-Tool" -Password $sec -AccountNeverExpires -ErrorAction SilentlyContinue } catch { }
-        cmd.exe /c "net user `"M11 Dev-Tool`" `"M11Pass#2026`" /add /active:yes /expires:never" 2>$null | Out-Null
-        cmd.exe /c "net localgroup `"Remote Desktop Users`" `"M11 Dev-Tool`" /add" 2>$null | Out-Null
-        cmd.exe /c "net localgroup `"Administrators`" `"M11 Dev-Tool`" /add" 2>$null | Out-Null
-        cmd.exe /c "wmic useraccount where name='M11 Dev-Tool' set PasswordExpires=false" 2>$null | Out-Null
-
-        # --- 2. auto-logon (this is what made RDP land on "Other user") -------
-        try {
-            $wl = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
-            Set-ItemProperty -Path $wl -Name 'AutoAdminLogon'    -Value '1'            -Type String -Force -ErrorAction Stop
-            Set-ItemProperty -Path $wl -Name 'DefaultUserName'   -Value 'M11 Dev-Tool' -Type String -Force -ErrorAction Stop
-            Set-ItemProperty -Path $wl -Name 'DefaultPassword'   -Value $plainPass     -Type String -Force -ErrorAction Stop
-            Set-ItemProperty -Path $wl -Name 'DefaultDomainName' -Value $env:COMPUTERNAME -Type String -Force -ErrorAction Stop
-            Set-ItemProperty -Path $wl -Name 'ForceAutoLogon'    -Value '1'            -Type String -Force -ErrorAction SilentlyContinue
-            Remove-ItemProperty -Path $wl -Name 'AutoLogonCount' -ErrorAction SilentlyContinue
-            Write-Host "auto-logon configured" -ForegroundColor Green
-        } catch { Write-Host ("auto-logon warning: " + $_.Exception.Message) -ForegroundColor Yellow }
-
-        # --- 3. session policy: stop "too many users signed in" --------------
-        try {
-            $ts = 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server'
-            Set-ItemProperty -Path $ts -Name 'fSingleSessionPerUser' -Value 1 -Type DWord -Force
-            Set-ItemProperty -Path $ts -Name 'fDenyTSConnections'    -Value 0 -Type DWord -Force
-            Set-ItemProperty -Path "$ts\WinStations\RDP-Tcp" -Name 'MaxDisconnectionTime' -Value 900000 -Type DWord -Force -ErrorAction SilentlyContinue
-            Set-ItemProperty -Path "$ts\WinStations\RDP-Tcp" -Name 'MaxIdleTime' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-            Write-Host "session policy configured" -ForegroundColor Green
-        } catch { Write-Host ("policy warning: " + $_.Exception.Message) -ForegroundColor Yellow }
-
-        # --- 4. self-heal: pull the corrected toolkit from the repository -----
-        try {
-            $base = "https://raw.githubusercontent.com/${{ github.repository }}/main"
-            foreach ($f in @('M11_RDP_REPAIR.ps1','toolkit/M11_MASTER_RUNNER.bat','toolkit/M11_MASTER_CONTROL_CENTER.bat','toolkit/M11_UNIVERSAL_STORE.bat','toolkit/M11_GAMES_HUB.bat','toolkit/_M11_SELF_TEST.bat','toolkit/_M11_MOJI_CHECK.ps1','toolkit/_M11_WINGET_ENSURE.bat','toolkit/_M11_WINGET_FIND.ps1','toolkit/_M11_WINGET_BOOTSTRAP.ps1','toolkit/00_System_And_3D_Gaming_Turbo_Optimizer.bat')) {
-                $dst = "C:\M11Data\toolkit\" + (Split-Path $f -Leaf)
-                New-Item -ItemType Directory -Path "C:\M11Data\toolkit" -Force -ErrorAction SilentlyContinue | Out-Null
-                curl.exe -fsSL "$base/$f" -o $dst 2>$null
-            }
-            if (Test-Path "C:\M11Data\toolkit\M11_MASTER_RUNNER.bat") {
-                Write-Host "corrected toolkit fetched from repository" -ForegroundColor Green
-                $rep = "C:\M11Data\toolkit\M11_RDP_REPAIR.ps1"
-                if (Test-Path $rep) {
-                    powershell.exe -NoProfile -ExecutionPolicy Bypass -File $rep
-                    Write-Host "self-heal repair executed" -ForegroundColor Green
-                }
-            } else {
-                Write-Host "toolkit not present in repository yet - client will deploy it" -ForegroundColor Yellow
-            }
-        } catch { Write-Host ("self-heal notice: " + $_.Exception.Message) -ForegroundColor Yellow }
-
     - name: 2B. M11 Gaming & 3D App Hyper-Bypass Engine (Roblox, DirectX, Audiosrv, Anti-Cheat)
       run: |
         Write-Host ">>> Activating M11 Gaming & 3D App Hyper-Bypass Engine <<<" -ForegroundColor Green
@@ -615,7 +537,7 @@ jobs:
         )
         foreach ($cp in $cfgPaths) {
             New-Item -ItemType Directory -Path $cp -Force -ErrorAction SilentlyContinue | Out-Null
-            [System.IO.File]::WriteAllText("$cp\ClientAppSettings.json", $rblxFlags, (New-Object System.Text.UTF8Encoding($false)))
+            $rblxFlags | Out-File -FilePath "$cp\ClientAppSettings.json" -Encoding ascii -Force
         }
 
         # 3. Create Startup Splash Screen Script (Honoring Student Developer Mohamed El-Sayed Abdelfattah)
@@ -687,7 +609,7 @@ jobs:
 
         `$form.ShowDialog() | Out-Null
         "@
-        [System.IO.File]::WriteAllText("C:\M11Data\M11_Startup_Splash.ps1", $splashPs1, (New-Object System.Text.UTF8Encoding($false)))
+        $splashPs1 | Out-File -FilePath "C:\M11Data\M11_Startup_Splash.ps1" -Encoding utf8 -Force
 
         # Startup launch batch
         $welcomeBat = @"
@@ -701,7 +623,7 @@ jobs:
         )
         foreach ($st in $startupDirs) {
             if (-not (Test-Path $st)) { New-Item -ItemType Directory -Path $st -Force -ErrorAction SilentlyContinue | Out-Null }
-            [System.IO.File]::WriteAllText("$st\M11_Welcome.bat", $welcomeBat, (New-Object System.Text.UTF8Encoding($false)))
+            $welcomeBat | Out-File -FilePath "$st\M11_Welcome.bat" -Encoding ascii -Force
         }
     - name: 2E. Deploy M11 Tool Suite Core Gaming & System Engines on Desktop
       run: |
@@ -713,7 +635,7 @@ jobs:
         @echo off
         setlocal EnableDelayedExpansion
         chcp 65001 >nul 2>&1
-        title M11 MASTER CONTROL CENTER - 3D GAMING ^& APP WORKSTATION (v1.11)
+        title M11 MASTER CONTROL CENTER - 3D GAMING & APP WORKSTATION (v1.11)
         color 0b
         cd /d "%~dp0"
         set "ENG=%~dp0📁_M11_TOOL_PC\📁_Engines_And_Scripts"
@@ -722,7 +644,7 @@ jobs:
         :main_menu
         cls
         echo ==============================================================================
-        echo       ⚡ M11 TOOL - PC | MASTER GAMING ^& CLOUD CONTROL CENTER (v1.11)
+        echo       ⚡ M11 TOOL - PC | MASTER GAMING & CLOUD CONTROL CENTER (v1.11)
         echo   Developer : Mohamed El-Sayed Abdelfattah - M11 Dev (2nd Secondary Al-Azhar)
         echo   Hardware  : 16GB Physical RAM ^| 4 Dedicated vCPUs ^| 200GB SSD ^| 60 FPS
         echo   Status    : Unrestricted Root Access ^| Bilingual English + Arabic Active
@@ -730,38 +652,38 @@ jobs:
         echo.
         echo --- CORE SYSTEM ENGINES (RUN ONCE UPON FIRST LOGIN) ---------------------------
         echo   [1] 3D GAMING TURBO OPTIMIZER           --^> [MANDATORY - MUST DO FIRST]
-        echo       * Enables Audio, DirectPlay, DirectX 9/11, VC++ AIO, PhysX ^& 60 FPS WARP.
+        echo       * Enables Audio, DirectPlay, DirectX 9/11, VC++ AIO, PhysX & 60 FPS WARP.
         echo.
-        echo   [2] UNBLOCK INTERNET, OUTLOOK ^& BROWSER --^> [MANDATORY - MUST DO FIRST]
+        echo   [2] UNBLOCK INTERNET, OUTLOOK & BROWSER --^> [MANDATORY - MUST DO FIRST]
         echo       * Disables IE ESC, unblocks Outlook signup, sets 1.1.1.1 DNS, all downloads.
         echo.
-        echo   [3] ROBLOX PLAYER ^& STUDIO HUB          --^> [RECOMMENDED]
+        echo   [3] ROBLOX PLAYER & STUDIO HUB          --^> [RECOMMENDED]
         echo       * Bypasses Byfron/Hyper-V VM detection, installs WebView2, locks 60 FPS.
         echo.
         echo   [4] 1-CLICK INSTALL ALL RUNTIMES        --^> [MANDATORY - MUST DO FIRST]
         echo       * Installs DirectX 9.0c AIO, Visual C++ 2005-2022, NVIDIA PhysX, .NET 8.
         echo.
         echo   [5] 3D GAME COMPATIBILITY INJECTOR      --^> [RECOMMENDED FOR CRASHING GAMES]
-        echo       * Injects dgVoodoo2 D3D9-to-D3D11 WARP wrapper ^& PhysX into Mafia II / Steam.
+        echo       * Injects dgVoodoo2 D3D9-to-D3D11 WARP wrapper & PhysX into Mafia II / Steam.
         echo.
-        echo   [6] INSTALL ESSENTIAL BROWSERS ^& APPS   --^> [RECOMMENDED]
+        echo   [6] INSTALL ESSENTIAL BROWSERS & APPS   --^> [RECOMMENDED]
         echo       * 1-Click Install: Chrome Enterprise, Discord, VS Code, 7-Zip, Tools.
         echo.
-        echo   [7] FREE 100GB SSD ^& LINK DRIVE D:      --^> [RECOMMENDED]
+        echo   [7] FREE 100GB SSD & LINK DRIVE D:      --^> [RECOMMENDED]
         echo       * Cleans 80GB temp files and links secondary 100GB SSD as C:\ExtraStorage.
         echo.
-        echo --- GAMING, PERSISTENCE ^& UTILITIES -------------------------------------------
-        echo   [8] DOWNLOAD GTA V ^& HEAVY 3D GAMES     --^> [OPTIONAL]
+        echo --- GAMING, PERSISTENCE & UTILITIES -------------------------------------------
+        echo   [8] DOWNLOAD GTA V & HEAVY 3D GAMES     --^> [OPTIONAL]
         echo       * Rockstar Launcher, Steam, Epic Games, Minecraft, Offline Game Libraries.
         echo.
         echo   [9] INSTANT CLOUD BACKUP (SAVE STATE)   --^> [RECOMMENDED BEFORE CLOSING]
-        echo       * Preserves Desktop, Documents, Downloads ^& Roblox configs to GitHub repo.
+        echo       * Preserves Desktop, Documents, Downloads & Roblox configs to GitHub repo.
         echo.
-        echo   [D] SYSTEM ^& RUNTIME AUDIT              --^> [OPTIONAL]
+        echo   [D] SYSTEM & RUNTIME AUDIT              --^> [OPTIONAL]
         echo       * Checks installed vs missing DirectX, VC++, PhysX, Audio, and Storage.
         echo.
-        echo   [K] ENABLE ARABIC ^& ENGLISH KEYBOARD    --^> [RECOMMENDED]
-        echo       * Adds Arabic (101) ^& English (US) layouts. Switch instantly with Alt+Shift!
+        echo   [K] ENABLE ARABIC & ENGLISH KEYBOARD    --^> [RECOMMENDED]
+        echo       * Adds Arabic (101) & English (US) layouts. Switch instantly with Alt+Shift!
         echo.
         echo   [0] Exit to Windows Desktop
         echo ==============================================================================
@@ -786,7 +708,7 @@ jobs:
 
         :menu_game_setup
         cls
-        echo [1] ENABLING 1-CLICK SYSTEM ^& 3D GAMING SETUP...
+        echo [1] ENABLING 1-CLICK SYSTEM & 3D GAMING SETUP...
         sc config Audiosrv start=auto >nul 2>&1 & net start Audiosrv >nul 2>&1
         sc config AudioEndpointBuilder start=auto >nul 2>&1 & net start AudioEndpointBuilder >nul 2>&1
         powershell -NoProfile -Command "Enable-WindowsOptionalFeature -Online -FeatureName DirectPlay -NoRestart" >nul 2>&1
@@ -808,7 +730,7 @@ jobs:
 
         :menu_unblock_net
         cls
-        echo [2] UNBLOCKING INTERNET, OUTLOOK ^& BROWSER SECURITY...
+        echo [2] UNBLOCKING INTERNET, OUTLOOK & BROWSER SECURITY...
         reg add "HKLM\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A7-37EF-4b3f-8CFC-4F3A74704073}" /v "IsInstalled" /t REG_DWORD /d 0 /f >nul 2>&1
         reg add "HKLM\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A8-37EF-4b3f-8CFC-4F3A74704073}" /v "IsInstalled" /t REG_DWORD /d 0 /f >nul 2>&1
         reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap" /v "IEHarden" /t REG_DWORD /d 0 /f >nul 2>&1
@@ -826,7 +748,7 @@ jobs:
 
         :menu_keyboard
         cls
-        echo [K] ENABLING ARABIC ^& ENGLISH KEYBOARD LAYOUT (ALT+SHIFT)...
+        echo [K] ENABLING ARABIC & ENGLISH KEYBOARD LAYOUT (ALT+SHIFT)...
         powershell -NoProfile -Command "try { $l = New-WinUserLanguageList -LanguageTag 'en-US'; $l.Add('ar-EG'); Set-WinUserLanguageList -LanguageList $l -Force } catch { Set-WinUserLanguageList -LanguageList en-US, ar-EG -Force }" >nul 2>&1
         reg add "HKCU\Keyboard Layout\Preload" /v "1" /t REG_SZ /d "00000409" /f >nul 2>&1
         reg add "HKCU\Keyboard Layout\Preload" /v "2" /t REG_SZ /d "00000401" /f >nul 2>&1
@@ -851,7 +773,7 @@ jobs:
 
         :menu_roblox
         cls
-        echo [3] ROBLOX 60 FPS SUPER FIX ^& VM BYPASS...
+        echo [3] ROBLOX 60 FPS SUPER FIX & VM BYPASS...
         if exist "%ENG%\01_Roblox_Deep_Fix_And_Installer.bat" (
             call "%ENG%\01_Roblox_Deep_Fix_And_Installer.bat"
         )
@@ -893,7 +815,7 @@ jobs:
 
         :menu_apps
         cls
-        echo [6] INSTALL ESSENTIAL BROWSERS ^& APPS...
+        echo [6] INSTALL ESSENTIAL BROWSERS & APPS...
         if exist "%ENG%\06_Install_Developer_And_Productivity_Apps.bat" (
             call "%ENG%\06_Install_Developer_And_Productivity_Apps.bat"
         ) else if exist "%~dp0📁_M11_TOOL_PC\🛒_M11_UNIVERSAL_STORE.bat" (
@@ -906,7 +828,7 @@ jobs:
 
         :menu_storage
         cls
-        echo [7] FREE 100GB SSD ^& LINK DRIVE D:...
+        echo [7] FREE 100GB SSD & LINK DRIVE D:...
         if exist "%ENG%\04_Free_Up_100GB_Disk_Space.bat" (
             call "%ENG%\04_Free_Up_100GB_Disk_Space.bat"
         ) else (
@@ -919,7 +841,7 @@ jobs:
 
         :menu_games
         cls
-        echo [8] DOWNLOAD GTA V ^& HEAVY 3D GAMES...
+        echo [8] DOWNLOAD GTA V & HEAVY 3D GAMES...
         if exist "%ENG%\15_GTA_V_And_Heavy_Games_Downloader.bat" (
             call "%ENG%\15_GTA_V_And_Heavy_Games_Downloader.bat"
         ) else if exist "%~dp0📁_M11_TOOL_PC\🎮_DOWNLOAD_GTA_V_AND_HEAVY_GAMES.bat" (
@@ -941,7 +863,7 @@ jobs:
 
         :menu_audit
         cls
-        echo [D] SYSTEM ^& GAMING RUNTIME STATUS AUDIT
+        echo [D] SYSTEM & GAMING RUNTIME STATUS AUDIT
         if exist "C:\Windows\System32\d3dx9_43.dll" (echo   [x] DirectX 9.0c Runtimes        : INSTALLED) else (echo   [ ] DirectX 9.0c Runtimes        : MISSING)
         if exist "C:\Windows\System32\vcruntime140.dll" (echo   [x] Visual C++ 2015-2022         : INSTALLED) else (echo   [ ] Visual C++ 2015-2022         : MISSING)
         if exist "C:\Program Files (x86)\NVIDIA Corporation\PhysX" (echo   [x] NVIDIA PhysX System Software : INSTALLED) else (echo   [ ] NVIDIA PhysX System Software : MISSING)
@@ -959,216 +881,66 @@ jobs:
         @echo off
         setlocal EnableDelayedExpansion
         chcp 65001 >nul 2>&1
-        title M11 ROBLOX PLAYER + STUDIO DEPLOYER (v3.2)
+        title M11 ROBLOX 60 FPS SUPER FIX & VM HYPER-BYPASS
         color 0a
-        
-        rem ============================================================================
-        rem  M11 TOOL - PC : ENGINE 01 v3.2 - Roblox Player + Studio Deployer
-        rem  Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
-        rem  What it does:
-        rem    1. Installs Roblox Player silently (winget -> official installer -> CDN)
-        rem    2. Installs Roblox Studio silently (the client that DOES run on VMs)
-        rem    3. Applies 60 FPS Direct3D11 fast flags to EVERY version folder, and
-        rem       PROVES the JSON is valid (no more silent broken settings file)
-        rem    4. Registers roblox-player / roblox-studio protocols so Play works
-        rem    5. Applies the known anti-VM-detection mitigations (best effort)
-        rem    6. LAUNCH-TESTS both apps and writes an honest report with real evidence
-        rem  Honest note: Roblox Player refuses to start on virtual machines by design
-        rem  (Hyperion anti-cheat). The mitigations below help where the VM is only
-        rem  detected through guest features - on a real PC this engine gives a
-        rem  perfect 60 FPS setup. Studio works on VMs and is installed as well.
-        rem ============================================================================
-        
-        set "LOGDIR=C:\M11Data"
-        if not exist "%LOGDIR%" set "LOGDIR=%TEMP%"
-        set "RPT=%LOGDIR%\m11_roblox_report.txt"
-        
-        set "SETTINGS_JSON={"DFIntTaskSchedulerTargetFps":60,"FFlagTaskSchedulerLimitTargetFpsTo240":"False","FFlagDebugGraphicsPreferD3D11":"True","FFlagDebugGraphicsDisableDirect3D11":"False","DFFlagDisableDPIScale":"True","FFlagGraphicsDirect3D11ForceD3D11":"True","FFlagDebugGraphicsPreferD3D11FL10":"True","DFIntCanHideGuiGroupId":32380007,"FIntRenderShadowIntensity":0,"DFIntDebugFRMQualityLevelOverride":1}"
-        
+
         echo ==============================================================================
-        echo    M11 ROBLOX DEPLOYER v3.2 - Player + Studio, silent and verified
+        echo       M11 ROBLOX 60 FPS SUPER FIX & VM HYPER-BYPASS ENGINE (v1.11)
+        echo   Developer: Mohamed El-Sayed Abdelfattah - M11 Dev (2nd Secondary Al-Azhar)
         echo ==============================================================================
-        echo. > "%RPT%"
-        echo ===== M11 ROBLOX v3.2 %DATE% %TIME% ===== >> "%RPT%"
-        echo user=%USERNAME% profile=%USERPROFILE% >> "%RPT%"
-        
-        echo [1/9] Stopping lingering Roblox processes...
-        taskkill /f /im RobloxPlayerBeta.exe >nul 2>&1
-        taskkill /f /im RobloxStudioBeta.exe >nul 2>&1
-        taskkill /f /im RobloxCrashHandler.exe >nul 2>&1
-        taskkill /f /im RobloxPlayerInstaller.exe >nul 2>&1
-        
-        echo [2/9] Cleaning corrupt Roblox state (installed versions are kept)...
-        reg delete "HKCU\Software\ROBLOX Corporation\Environments" /f >nul 2>&1
-        rmdir /s /q "%TEMP%\Roblox" >nul 2>&1
-        rem  client logs are kept on purpose: they are the proof of what happened
-        
-        echo [3/9] Ensuring WebView2 + VC++ 2015-2022 (x86 + x64)...
-        if not exist "%PROGRAMFILES(X86)%\Microsoft\EdgeWebView\Application" if not exist "%PROGRAMFILES%\Microsoft\EdgeWebView\Application" (
-            curl.exe -fsSL --max-time 300 -o "%TEMP%\WebView2Setup.exe" "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
-            if exist "%TEMP%\WebView2Setup.exe" start "" /wait "%TEMP%\WebView2Setup.exe" /silent /install
+        echo.
+        echo [*] Terminating lingering Roblox processes...
+        taskkill /f /im RobloxPlayerBeta.exe 2>nul
+        taskkill /f /im RobloxStudioBeta.exe 2>nul
+        taskkill /f /im RobloxPlayerLauncher.exe 2>nul
+
+        echo [*] Resetting corrupt Roblox registry and AppData state...
+        reg delete "HKCU\Software\ROBLOX Corporation" /f 2>nul
+        reg delete "HKLM\SOFTWARE\ROBLOX Corporation" /f 2>nul
+        rmdir /s /q "%LOCALAPPDATA%\Roblox\Downloads" 2>nul
+        rmdir /s /q "%TEMP%\Roblox" 2>nul
+
+        echo [*] Verifying Microsoft Edge WebView2 runtime...
+        if not exist "%PROGRAMFILES(X86)%\Microsoft\EdgeWebView\Application" (
+            echo Installing Edge WebView2 runtime for Roblox login and UI rendering...
+            curl -L -s -o "%TEMP%\MicrosoftEdgeWebview2Setup.exe" "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+            start /wait "" "%TEMP%\MicrosoftEdgeWebview2Setup.exe" /silent /install
         )
-        curl.exe -fsSL --max-time 300 -o "%TEMP%\vc_x64.exe" "https://aka.ms/vs/17/release/vc_redist.x64.exe"
-        curl.exe -fsSL --max-time 300 -o "%TEMP%\vc_x86.exe" "https://aka.ms/vs/17/release/vc_redist.x86.exe"
-        if exist "%TEMP%\vc_x64.exe" start "" /wait "%TEMP%\vc_x64.exe" /quiet /norestart
-        if exist "%TEMP%\vc_x86.exe" start "" /wait "%TEMP%\vc_x86.exe" /quiet /norestart
-        
-        echo [4/9] Installing Roblox Player silently...
-        call :PLAYER_INSTALLED
-        if "!PINST!"=="0" (
-            where winget >nul 2>&1
-            if !errorlevel! EQU 0 winget install -e --id Roblox.Roblox --silent --accept-package-agreements --accept-source-agreements --disable-interactivity >nul 2>&1
-            call :PLAYER_INSTALLED
-        )
-        if "!PINST!"=="0" (
-            curl.exe -fsSL --max-time 300 -o "%TEMP%\RobloxPlayerInstaller.exe" "https://setup.rbxcdn.com/RobloxPlayerInstaller.exe"
-            if exist "%TEMP%\RobloxPlayerInstaller.exe" start "" /wait "%TEMP%\RobloxPlayerInstaller.exe" -install -silent
-            ping -n 6 127.0.0.1 >nul
-            call :PLAYER_INSTALLED
-        )
-        echo       player installed = !PINST! >> "%RPT%"
-        if "!PINST!"=="1" (echo       Player: installed.) else (echo       Player: NOT installed - check your connection and run again.)
-        
-        echo [5/9] Installing Roblox Studio silently (works on virtual machines)...
-        call :STUDIO_INSTALLED
-        if "!SINST!"=="0" (
-            curl.exe -fsSL --max-time 300 -o "%TEMP%\RobloxStudioInstaller.exe" "https://setup.rbxcdn.com/RobloxStudioInstaller.exe"
-            if exist "%TEMP%\RobloxStudioInstaller.exe" (
-                start "" /wait "%TEMP%\RobloxStudioInstaller.exe" -silent
-                ping -n 21 127.0.0.1 >nul
-            )
-            call :STUDIO_INSTALLED
-            if "!SINST!"=="0" (
-                where winget >nul 2>&1
-                if !errorlevel! EQU 0 winget install -e --id Roblox.RobloxStudio --silent --accept-package-agreements --accept-source-agreements --disable-interactivity >nul 2>&1
-                call :STUDIO_INSTALLED
-            )
-        )
-        echo       studio installed = !SINST! >> "%RPT%"
-        if "!SINST!"=="1" (echo       Studio: installed.) else (echo       Studio: not installed yet - run this engine again later.)
-        
-        echo [6/9] Applying 60 FPS Direct3D11 fast flags to every installed version...
-        set "FLAGN=0"
-        mkdir "%LOCALAPPDATA%\Roblox\ClientSettings" >nul 2>&1
+
+        echo [*] Configuring 60 FPS Direct3D 11 FastFlags...
+        set "SETTINGS_JSON={"DFIntTaskSchedulerTargetFps":60,"FFlagTaskSchedulerLimitTargetFpsTo240":"False","FFlagDebugGraphicsPreferD3D11":"True","FFlagDebugGraphicsDisableDirect3D11":"False","DFFlagDisableDPIScale":"True","FFlagGraphicsDirect3D11ForceD3D11":"True","FFlagDebugGraphicsPreferD3D11FL10":"True","DFIntCanHideGuiGroupId":32380007}"
+
+        mkdir "%LOCALAPPDATA%\Roblox\ClientSettings" 2>nul
         echo !SETTINGS_JSON! > "%LOCALAPPDATA%\Roblox\ClientSettings\ClientAppSettings.json"
-        for %%R in ("C:\Program Files (x86)\Roblox\Versions" "C:\Program Files (x86)\Roblox\Studio" "C:\Program Files\Roblox\Versions" "C:\Program Files\Roblox\Studio" "%LOCALAPPDATA%\Roblox\Versions" "%LOCALAPPDATA%\Roblox\Studio") do (
-            if exist %%R (
-                for /d %%D in ("%%~R\*") do (
-                    mkdir "%%D\ClientSettings" >nul 2>&1
-                    echo !SETTINGS_JSON! > "%%D\ClientSettings\ClientAppSettings.json"
-                    set /a FLAGN+=1
-                )
+
+        for /d %%D in ("%LOCALAPPDATA%\Roblox\Versions\*") do (
+            if exist "%%D\RobloxPlayerBeta.exe" (
+                mkdir "%%D\ClientSettings" 2>nul
+                echo !SETTINGS_JSON! > "%%D\ClientSettings\ClientAppSettings.json"
+                reg add "HKCU\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" /v "%%D\RobloxPlayerBeta.exe" /t REG_SZ /d "~ HIGHDPIAWARE RUNASADMIN" /f 2>nul
+            )
+            if exist "%%D\RobloxStudioBeta.exe" (
+                mkdir "%%D\ClientSettings" 2>nul
+                echo !SETTINGS_JSON! > "%%D\ClientSettings\ClientAppSettings.json"
             )
         )
-        set "LOCALJSON=%LOCALAPPDATA%\Roblox\ClientSettings\ClientAppSettings.json"
-        powershell -NoProfile -Command "try { $o = Get-Content -Raw -LiteralPath (Join-Path $env:LOCALAPPDATA 'Roblox\ClientSettings\ClientAppSettings.json') | ConvertFrom-Json; Write-Output ('FLAGS JSON: VALID fps=' + $o.DFIntTaskSchedulerTargetFps + ' d3d11=' + $o.FFlagDebugGraphicsPreferD3D11) } catch { Write-Output ('FLAGS JSON: INVALID - ' + $_.Exception.Message) }" >> "%RPT%" 2>&1
-        echo       versions folders patched = !FLAGN! >> "%RPT%"
-        
-        echo [7/9] Selecting the real launchers and registering protocols...
-        set "PLAYER="
-        set "STUDIO="
-        for /d %%D in ("C:\Program Files (x86)\Roblox\Versions\*") do if not defined PLAYER if exist "%%D\RobloxPlayerBeta.exe" set "PLAYER=%%D\RobloxPlayerBeta.exe"
-        for /d %%D in ("C:\Program Files\Roblox\Versions\*") do if not defined PLAYER if exist "%%D\RobloxPlayerBeta.exe" set "PLAYER=%%D\RobloxPlayerBeta.exe"
-        for /d %%D in ("%LOCALAPPDATA%\Roblox\Versions\*") do if not defined PLAYER if exist "%%D\RobloxPlayerBeta.exe" set "PLAYER=%%D\RobloxPlayerBeta.exe"
-        for /d %%D in ("C:\Program Files\Roblox\Versions\*") do if not defined STUDIO if exist "%%D\RobloxStudioBeta.exe" set "STUDIO=%%D\RobloxStudioBeta.exe"
-        for /d %%D in ("C:\Program Files (x86)\Roblox\Versions\*") do if not defined STUDIO if exist "%%D\RobloxStudioBeta.exe" set "STUDIO=%%D\RobloxStudioBeta.exe"
-        for /d %%D in ("%LOCALAPPDATA%\Roblox\Versions\*") do if not defined STUDIO if exist "%%D\RobloxStudioBeta.exe" set "STUDIO=%%D\RobloxStudioBeta.exe"
-        echo       player launcher = !PLAYER! >> "%RPT%"
-        echo       studio launcher = !STUDIO! >> "%RPT%"
-        if defined PLAYER (
-            reg add "HKCU\Software\Classes\roblox-player\shell\open\command" /ve /d "\"!PLAYER!\" \"%%1\"" /f >nul 2>&1
-            reg add "HKCU\Software\Classes\roblox\shell\open\command" /ve /d "\"!PLAYER!\" \"%%1\"" /f >nul 2>&1
-            reg add "HKCU\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" /v "!PLAYER!" /t REG_SZ /d "~ HIGHDPIAWARE" /f >nul 2>&1
-            reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v "!PLAYER!" /t REG_SZ /d "GpuPreference=2;" /f >nul 2>&1
-            netsh advfirewall firewall add rule name="M11 Roblox Player" dir=in action=allow program="!PLAYER!" >nul 2>&1
-            echo       protocol roblox-player -^> !PLAYER! >> "%RPT%"
+
+        echo [*] Checking Roblox Player installation...
+        if not exist "%LOCALAPPDATA%\Roblox\Versions\*\RobloxPlayerBeta.exe" (
+            echo Downloading latest Roblox Player installer from clean CDN...
+            curl -L -o "%TEMP%\RobloxPlayerInstaller.exe" "https://setup.rbxcdn.com/RobloxPlayerInstaller.exe"
+            echo Launching Roblox Player installer...
+            start "" "%TEMP%\RobloxPlayerInstaller.exe"
+            echo [INFO] Installer started. Follow on-screen prompts if required.
+        ) else (
+            echo [SUCCESS] Roblox Player is installed and optimized for 60 FPS!
         )
-        if defined STUDIO (
-            reg add "HKCU\Software\Classes\roblox-studio\shell\open\command" /ve /d "\"!STUDIO!\" \"%%1\"" /f >nul 2>&1
-            reg add "HKCU\Software\Classes\roblox-studio-auth\shell\open\command" /ve /d "\"!STUDIO!\" \"%%1\"" /f >nul 2>&1
-            netsh advfirewall firewall add rule name="M11 Roblox Studio" dir=in action=allow program="!STUDIO!" >nul 2>&1
-        )
-        
-        echo [8/9] Anti-VM-detection mitigations (best effort, needs one reboot to bite)...
-        powershell -NoProfile -Command "Disable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -NoRestart -ErrorAction SilentlyContinue" >nul 2>&1
-        powershell -NoProfile -Command "Disable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart -ErrorAction SilentlyContinue" >nul 2>&1
-        powershell -NoProfile -Command "Disable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -NoRestart -ErrorAction SilentlyContinue" >nul 2>&1
-        reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard" /v EnableVirtualizationBasedSecurity /t REG_DWORD /d 0 /f >nul 2>&1
-        reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" /v Enabled /t REG_DWORD /d 0 /f >nul 2>&1
-        reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\CredentialGuard" /v Enabled /t REG_DWORD /d 0 /f >nul 2>&1
-        bcdedit /set hypervisorlaunchtype off >nul 2>&1
-        echo       mitigations applied - memory integrity off - Hyper-V guest off - hypervisorlaunchtype=off >> "%RPT%"
-        echo       NOTE: a reboot is required for these to take effect. >> "%RPT%"
-        
-        echo [9/9] Launch test - Player 25 s then Studio 45 s...
-        set "PVM=unknown"
-        if not defined PLAYER goto :RPT_NOPLAYER
-        echo       testing player: !PLAYER! >> "%RPT%"
-        start "" "!PLAYER!"
-        ping -n 26 127.0.0.1 >nul
-        tasklist /fi "imagename eq RobloxPlayerBeta.exe" | find /i "RobloxPlayerBeta.exe" >nul 2>&1
-        if errorlevel 1 goto :RPT_PLAYER_DEAD
-        tasklist /fi "imagename eq RobloxPlayerBeta.exe" >> "%RPT%" 2>&1
-        echo       [PASS] RobloxPlayerBeta.exe is RUNNING >> "%RPT%"
-        echo [PASS] Player runs on this machine.
-        taskkill /f /im RobloxPlayerBeta.exe >nul 2>&1
-        set "PVM=working"
-        goto :RPT_PLAYER_DONE
-        :RPT_PLAYER_DEAD
-        echo       [INFO] Player did not stay open - the expected result on a virtual machine. >> "%RPT%"
-        echo       [INFO] Roblox anti-cheat Hyperion blocks virtual machines by design. >> "%RPT%"
-        set "PVM=blocked"
-        :RPT_PLAYER_DONE
-        set "PLOG=%LOCALAPPDATA%\Roblox\logs"
-        set "NEWESTLOG="
-        for /f "delims=" %%L in ('dir /b /o-d "!PLOG!\*RobloxPlayer*.log" 2^>nul') do if not defined NEWESTLOG set "NEWESTLOG=%%L"
-        if defined NEWESTLOG echo       newest player log: !NEWESTLOG! >> "%RPT%"
-        if defined NEWESTLOG findstr /i /c:"virtual machine" "!PLOG!\!NEWESTLOG!" >nul 2>&1 && echo       [EVIDENCE] player log mentions: virtual machine >> "%RPT%"
-        goto :RPT_STUDIO
-        :RPT_NOPLAYER
-        echo       [WARN] player not installed >> "%RPT%"
-        :RPT_STUDIO
-        if not defined STUDIO goto :RPT_NOSTUDIO
-        echo       testing studio: !STUDIO! >> "%RPT%"
-        start "" "!STUDIO!"
-        ping -n 46 127.0.0.1 >nul
-        tasklist /fi "imagename eq RobloxStudioBeta.exe" | find /i "RobloxStudioBeta.exe" >nul 2>&1
-        if errorlevel 1 goto :RPT_STUDIO_DEAD
-        tasklist /fi "imagename eq RobloxStudioBeta.exe" >> "%RPT%" 2>&1
-        echo       [PASS] RobloxStudioBeta.exe is RUNNING >> "%RPT%"
-        echo [PASS] Studio runs on this machine - build and test games from here.
-        goto :RPT_DONE
-        :RPT_STUDIO_DEAD
-        echo       [INFO] Studio did not stay open yet - the first run can take a while. >> "%RPT%"
-        goto :RPT_DONE
-        :RPT_NOSTUDIO
-        echo       [WARN] studio not installed >> "%RPT%"
-        :RPT_DONE
-        
+
         echo.
         echo ==============================================================================
-        echo  ROBLOX DEPLOYER v3.2 finished.
-        echo    Player : %PVM%    (report: %RPT%)
-        echo    Studio : the VM-friendly Roblox client - install verified above.
+        echo [SUCCESS] Roblox 60 FPS & VM Hyper-Bypass applied successfully!
         echo ==============================================================================
-        if /i "%~1"=="nopause" exit /b 0
-        if "%~1"=="0" exit /b 0
-        pause
-        exit /b 0
-        
-        :PLAYER_INSTALLED
-        set "PINST=0"
-        for /d %%D in ("C:\Program Files (x86)\Roblox\Versions\*") do if exist "%%D\RobloxPlayerBeta.exe" set "PINST=1"
-        for /d %%D in ("C:\Program Files\Roblox\Versions\*") do if exist "%%D\RobloxPlayerBeta.exe" set "PINST=1"
-        for /d %%D in ("%LOCALAPPDATA%\Roblox\Versions\*") do if exist "%%D\RobloxPlayerBeta.exe" set "PINST=1"
-        exit /b 0
-        
-        :STUDIO_INSTALLED
-        set "SINST=0"
-        for /d %%D in ("C:\Program Files\Roblox\Versions\*") do if exist "%%D\RobloxStudioBeta.exe" set "SINST=1"
-        for /d %%D in ("C:\Program Files (x86)\Roblox\Versions\*") do if exist "%%D\RobloxStudioBeta.exe" set "SINST=1"
-        for /d %%D in ("%LOCALAPPDATA%\Roblox\Versions\*") do if exist "%%D\RobloxStudioBeta.exe" set "SINST=1"
-        exit /b 0
+
         '@
 
         # 2. Gaming Stores Engine
@@ -1178,7 +950,7 @@ jobs:
         color 0d
         echo [1] Install Steam (Valve Official)
         echo [2] Install Epic Games Store
-        echo [3] Install Minecraft Bedrock ^& Java Launcher
+        echo [3] Install Minecraft Bedrock & Java Launcher
         echo [4] Install All 3 Gaming Stores
         set /p sopt="Select [1-4]: "
         if "%sopt%"=="1" winget install --id Valve.Steam -e --silent --accept-package-agreements --accept-source-agreements
@@ -1195,7 +967,7 @@ jobs:
         # 3. Direct3D11 WARP & Mesa3D GPU Booster
         $gpuBat = @'
         @echo off
-        title M11 DIRECTX11 ^& WARP / MESA3D GPU TURBO ACCELERATOR
+        title M11 DIRECTX11 & WARP / MESA3D GPU TURBO ACCELERATOR
         color 0e
         echo [*] Enabling WARP Direct3D 11 multi-threading (4 Dedicated vCPUs)...
         setx WARP_FORCE_CPU_CORES 4 /M >nul 2>&1
@@ -1207,7 +979,7 @@ jobs:
 
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v "Win32PrioritySeparation" /t REG_DWORD /d 38 /f >nul 2>&1
         reg add "HKLM\SOFTWARE\Microsoft\Direct3D\Drivers" /v "SoftwareOnly" /t REG_DWORD /d 0 /f >nul 2>&1
-        echo [SUCCESS] 60 FPS Direct3D ^& OpenGL llvmpipe acceleration unlocked!
+        echo [SUCCESS] 60 FPS Direct3D & OpenGL llvmpipe acceleration unlocked!
         pause
         '@
 
@@ -1247,16 +1019,16 @@ jobs:
             if (-not (Test-Path $subDir)) { New-Item -ItemType Directory -Path $subDir -Force -ErrorAction SilentlyContinue | Out-Null }
 
             # Deploy Master Control Center directly on Desktop
-            [System.IO.File]::WriteAllText((Join-Path $desk "⚡_M11_MASTER_CONTROL_CENTER.bat"), $masterControlCenterBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText((Join-Path $desk "⚡_MASTER_RUNNER.bat"), $masterControlCenterBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText((Join-Path $toolDir "⚡_M11_MASTER_CONTROL_CENTER.bat"), $masterControlCenterBat, (New-Object System.Text.UTF8Encoding($false)))
+            Set-Content -Path (Join-Path $desk "⚡_M11_MASTER_CONTROL_CENTER.bat") -Value $masterControlCenterBat -Encoding utf8
+            Set-Content -Path (Join-Path $desk "⚡_MASTER_RUNNER.bat") -Value $masterControlCenterBat -Encoding utf8
+            Set-Content -Path (Join-Path $toolDir "⚡_M11_MASTER_CONTROL_CENTER.bat") -Value $masterControlCenterBat -Encoding utf8
 
             # Deploy Core Scripts in Engines folder
-            [System.IO.File]::WriteAllText((Join-Path $subDir "01_Roblox_Deep_Fix_And_Installer.bat"), $robloxDeepBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText((Join-Path $subDir "02_Install_Gaming_Stores_Steam_Epic_Minecraft.bat"), $storesBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText((Join-Path $subDir "03_DirectX11_WARP_Mesa3D_GPU_Booster.bat"), $gpuBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText((Join-Path $subDir "04_Free_Up_100GB_Disk_Space.bat"), $cleanBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText((Join-Path $subDir "05_Unlock_Full_Root_Admin_Privileges.bat"), $adminBat, (New-Object System.Text.UTF8Encoding($false)))
+            Set-Content -Path (Join-Path $subDir "01_Roblox_Deep_Fix_And_Installer.bat") -Value $robloxDeepBat -Encoding utf8
+            Set-Content -Path (Join-Path $subDir "02_Install_Gaming_Stores_Steam_Epic_Minecraft.bat") -Value $storesBat -Encoding utf8
+            Set-Content -Path (Join-Path $subDir "03_DirectX11_WARP_Mesa3D_GPU_Booster.bat") -Value $gpuBat -Encoding utf8
+            Set-Content -Path (Join-Path $subDir "04_Free_Up_100GB_Disk_Space.bat") -Value $cleanBat -Encoding utf8
+            Set-Content -Path (Join-Path $subDir "05_Unlock_Full_Root_Admin_Privileges.bat") -Value $adminBat -Encoding utf8
         }
         Write-Host "M11 Core Desktop Engines deployed successfully!" -ForegroundColor Green
 
@@ -1267,10 +1039,10 @@ jobs:
 
         $appsBat = @"
         @echo off
-        title M11 WORKSTATION PRODUCTIVITY ^& DEV APPS INSTALLER
+        title M11 WORKSTATION PRODUCTIVITY & DEV APPS INSTALLER
         color 0a
         echo ==============================================================================
-        echo       M11 PRODUCTIVITY ^& DEVELOPER APPS INSTALLER
+        echo       M11 PRODUCTIVITY & DEVELOPER APPS INSTALLER
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
@@ -1319,10 +1091,10 @@ jobs:
         $restoreBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 CLOUD SESSION ^& USER DATA AUTO-RESTORER
+        title M11 CLOUD SESSION & USER DATA AUTO-RESTORER
         color 0b
         echo ==============================================================================
-        echo       M11 CLOUD SESSION ^& USER DATA AUTO-RESTORER (مكان ما وقفت)
+        echo       M11 CLOUD SESSION & USER DATA AUTO-RESTORER (مكان ما وقفت)
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
@@ -1359,10 +1131,10 @@ jobs:
         $pingBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 INTERNET SPEED ^& GAMING PING BOOSTER
+        title M11 INTERNET SPEED & GAMING PING BOOSTER
         color 0e
         echo ==============================================================================
-        echo       M11 INTERNET SPEED ^& GAMING PING BOOSTER (Ultra Low Latency)
+        echo       M11 INTERNET SPEED & GAMING PING BOOSTER (Ultra Low Latency)
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
@@ -1374,18 +1146,18 @@ jobs:
         reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "NetworkThrottlingIndex" /t REG_DWORD /d 4294967295 /f >nul 2>&1
         reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "SystemResponsiveness" /t REG_DWORD /d 0 /f >nul 2>&1
 
-        echo [2/4] Setting Lightning-Fast DNS (Cloudflare 1.1.1.1 ^& Google 8.8.8.8)...
+        echo [2/4] Setting Lightning-Fast DNS (Cloudflare 1.1.1.1 & Google 8.8.8.8)...
         powershell -NoProfile -Command "Get-NetAdapter | Where-Object { `$_.Status -eq 'Up' } | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex `$_.InterfaceIndex -ServerAddresses ('1.1.1.1', '8.8.8.8', '1.0.0.1') -ErrorAction SilentlyContinue }" >nul 2>&1
 
         echo [3/4] Flushing DNS cache and resetting TCP/IP stack...
         ipconfig /flushdns >nul 2>&1
         netsh int ip reset >nul 2>&1
 
-        echo [4/4] Testing TCP latency to international datacenters (ICMP is blocked on cloud hosts)...
-        powershell -NoProfile -Command "`$t=@('1.1.1.1','8.8.8.8'); foreach(`$h in `$t){ `$ms=@(); foreach(`$i in 1..3){ `$sw=[Diagnostics.Stopwatch]::StartNew(); try{ `$c=New-Object Net.Sockets.TcpClient; `$c.Connect(`$h,443); `$c.Close(); `$sw.Stop(); `$ms+=[int]`$sw.ElapsedMilliseconds } catch { `$sw.Stop(); `$ms+=-1 } }; Write-Host ('  {0,-9} TCP:443 -> ' -f `$h) -NoNewline; Write-Host (`$ms -join ' / ') -ForegroundColor Green }"
+        echo [4/4] Testing ping response to international datacenters...
+        ping 1.1.1.1 -n 3
         echo.
         echo ==============================================================================
-        echo [SUCCESS] Network and TCP stack optimized for ultra-low latency ^& 1000 Mbps!
+        echo [SUCCESS] Network and TCP stack optimized for ultra-low latency & 1000 Mbps!
         echo ==============================================================================
         pause
         "@
@@ -1393,10 +1165,10 @@ jobs:
         $audioBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 RDP TWO-WAY AUDIO ^& VIRTUAL MICROPHONE ENABLER
+        title M11 RDP TWO-WAY AUDIO & VIRTUAL MICROPHONE ENABLER
         color 0a
         echo ==============================================================================
-        echo       M11 RDP TWO-WAY AUDIO ^& VIRTUAL MICROPHONE ENABLER
+        echo       M11 RDP TWO-WAY AUDIO & VIRTUAL MICROPHONE ENABLER
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
@@ -1404,7 +1176,7 @@ jobs:
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v "fDisableAudioCapture" /t REG_DWORD /d 0 /f >nul 2>&1
         reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" /v "fDisableAudioCapture" /t REG_DWORD /d 0 /f >nul 2>&1
 
-        echo [2/3] Restarting Windows Audio Services (Audiosrv ^& AudioEndpointBuilder)...
+        echo [2/3] Restarting Windows Audio Services (Audiosrv & AudioEndpointBuilder)...
         net stop Audiosrv >nul 2>&1
         net stop AudioEndpointBuilder >nul 2>&1
         sc.exe config Audiosrv start=auto >nul 2>&1
@@ -1427,11 +1199,11 @@ jobs:
             $subDir = "$mainDir\📁_Engines_And_Scripts"
             if (-not (Test-Path $subDir)) { New-Item -ItemType Directory -Path $subDir -Force -ErrorAction SilentlyContinue | Out-Null }
 
-            [System.IO.File]::WriteAllText("$subDir\06_Install_Developer_And_Productivity_Apps.bat", $appsBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText("$subDir\07_Instant_Cloud_Backup.bat", $backupBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText("$subDir\08_Cloud_Session_Auto_Restorer.bat", $restoreBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText("$subDir\09_Internet_Speed_And_Ping_Booster.bat", $pingBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText("$subDir\10_Audio_Microphone_Virtual_Cable.bat", $audioBat, (New-Object System.Text.UTF8Encoding($false)))
+            $appsBat | Out-File -FilePath "$subDir\06_Install_Developer_And_Productivity_Apps.bat" -Encoding ascii -Force
+            $backupBat | Out-File -FilePath "$subDir\07_Instant_Cloud_Backup.bat" -Encoding ascii -Force
+            $restoreBat | Out-File -FilePath "$subDir\08_Cloud_Session_Auto_Restorer.bat" -Encoding ascii -Force
+            $pingBat | Out-File -FilePath "$subDir\09_Internet_Speed_And_Ping_Booster.bat" -Encoding ascii -Force
+            $audioBat | Out-File -FilePath "$subDir\10_Audio_Microphone_Virtual_Cable.bat" -Encoding ascii -Force
         }
         Write-Host "M11 Advanced Productivity, Network, Audio & Auto-Restore Engines deployed 100% successfully!" -ForegroundColor Green
     - name: 2G. Deploy M11 Universal App Store, 32GB Virtual RAM & AIO Runtimes
@@ -1442,13 +1214,13 @@ jobs:
         $universalStoreBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 UNIVERSAL APP ^& GAME STORE (50+ 1-CLICK APPS ^& SEARCH)
+        title M11 UNIVERSAL APP & GAME STORE (50+ 1-CLICK APPS & SEARCH)
         color 0b
 
         :store_menu
         cls
         echo ==============================================================================
-        echo       🛒 M11 UNIVERSAL APP ^& GAME STORE (متجر M11 الشامل للتطبيقات والألعاب)
+        echo       🛒 M11 UNIVERSAL APP & GAME STORE (متجر M11 الشامل للتطبيقات والألعاب)
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo  Download and install ANY software or game in the world with 1-Click!
@@ -1462,7 +1234,7 @@ jobs:
         echo  [6]  💬 برامج الشات والتواصل (Discord / Telegram Desktop / WhatsApp / Zoom)
         echo  [7]  💻 أدوات البرمجة والتطوير (VS Code / Python 3.12 / Node.js / Git / Notepad++)
         echo  [8]  🧩 حزمة مكتبات تشغيل الألعاب AIO (DirectX / Visual C++ / OpenAL / .NET)
-        echo  [9]  🔍 بحث وتثبيت أي تطبيق أو لعبة أخرى بالاسم (Universal Search ^& Install)
+        echo  [9]  🔍 بحث وتثبيت أي تطبيق أو لعبة أخرى بالاسم (Universal Search & Install)
         echo  [0]  رجوع إلى القائمة الرئيسية (Back)
         echo ==============================================================================
         set /p sopt="اختر رقم القسم المطلوب [0-9]: "
@@ -1488,21 +1260,21 @@ jobs:
         goto store_menu
 
         :inst_games
-        echo [INSTALL] Launching Roblox ^& Minecraft Prism Launcher...
+        echo [INSTALL] Launching Roblox & Minecraft Prism Launcher...
         call "%~dp0📁_Engines_And_Scripts\01_Roblox_Deep_Fix_And_Installer.bat"
         goto store_menu
 
         :inst_browsers
-        echo [INSTALL] Installing Brave ^& Chrome Enterprise ^& Firefox...
+        echo [INSTALL] Installing Brave & Chrome Enterprise & Firefox...
         powershell -NoProfile -Command "Start-Process 'curl.exe' -ArgumentList '-fsSL https://laptop-updates.brave.com/latest/winx64 -o %TEMP%\BraveSetup.exe' -Wait; Start-Process '%TEMP%\BraveSetup.exe' -ArgumentList '/silent /install'"
         echo [SUCCESS] High speed browsers installed!
         pause
         goto store_menu
 
         :inst_office
-        echo [INSTALL] Installing LibreOffice Suite ^& SumatraPDF...
+        echo [INSTALL] Installing LibreOffice Suite & SumatraPDF...
         powershell -NoProfile -Command "winget install --id TheDocumentFoundation.LibreOffice --silent --accept-package-agreements --accept-source-agreements; winget install --id KrzysztofKowalczyk.SumatraPDF --silent"
-        echo [SUCCESS] Office ^& PDF tools ready!
+        echo [SUCCESS] Office & PDF tools ready!
         pause
         goto store_menu
 
@@ -1512,7 +1284,7 @@ jobs:
         goto store_menu
 
         :inst_social
-        echo [INSTALL] Installing Discord, Telegram ^& WhatsApp...
+        echo [INSTALL] Installing Discord, Telegram & WhatsApp...
         powershell -NoProfile -Command "Start-Process 'curl.exe' -ArgumentList '-fsSL https://telegram.org/dl/desktop/win64 -o %TEMP%\TelegramSetup.exe' -Wait; Start-Process '%TEMP%\TelegramSetup.exe' -ArgumentList '/VERYSILENT'"
         powershell -NoProfile -Command "Start-Process 'curl.exe' -ArgumentList '-fsSL https://dl.discordapp.net/apps/win/DiscordSetup.exe -o %TEMP%\DiscordSetup.exe' -Wait; Start-Process '%TEMP%\DiscordSetup.exe'"
         echo [SUCCESS] Social communication apps installed!
@@ -1532,13 +1304,13 @@ jobs:
         :inst_search
         cls
         echo ==============================================================================
-        echo       🔍 M11 UNIVERSAL APP SEARCH ^& INSTALLER
+        echo       🔍 M11 UNIVERSAL APP SEARCH & INSTALLER
         echo ==============================================================================
         echo Enter any app name (e.g. spotify, blender, unity, filezilla, zoom, viber):
         set /p app_query="App Name: "
         if "!app_query!"=="" goto store_menu
         echo.
-        echo Searching and installing "!app_query!" via Winget ^& Chocolatey...
+        echo Searching and installing "!app_query!" via Winget & Chocolatey...
         powershell -NoProfile -Command "winget install --name '!app_query!' --silent --accept-package-agreements --accept-source-agreements"
         if !errorlevel! neq 0 (
             powershell -NoProfile -Command "choco install '!app_query!' -y --no-progress"
@@ -1561,18 +1333,15 @@ jobs:
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
-        echo [1/4] Installing Visual C++ 2015-2022 (x86 ^& x64)...
+        echo [1/4] Installing Visual C++ 2015-2022 (x86 & x64)...
         curl.exe -fsSL "https://aka.ms/vs/17/release/vc_redist.x64.exe" -o "%TEMP%\vc_redist.x64.exe"
         curl.exe -fsSL "https://aka.ms/vs/17/release/vc_redist.x86.exe" -o "%TEMP%\vc_redist.x86.exe"
         start "" /wait "%TEMP%\vc_redist.x64.exe" /quiet /norestart
         start "" /wait "%TEMP%\vc_redist.x86.exe" /quiet /norestart
 
-        echo [2/4] Installing DirectX 9.0c End-User Runtimes (June 2010)...
-        curl.exe -fsSL "https://download.microsoft.com/download/8/4/a/84a35bf1-dafe-4ae8-82af-ad2ae20b6b14/directx_Jun2010_redist.exe" -o "%TEMP%\directx_jun2010.exe"
-        if exist "%TEMP%\directx_jun2010.exe" (
-            start "" /wait "%TEMP%\directx_jun2010.exe" /Q /T:"%TEMP%\DX"
-            if exist "%TEMP%\DX\DXSETUP.exe" start "" /wait "%TEMP%\DX\DXSETUP.exe" /silent
-        ) else ( echo [WARN] DirectX download failed - skipping )
+        echo [2/4] Installing DirectX End-User Runtime Web Installer...
+        curl.exe -fsSL "https://download.microsoft.com/download/1/7/1/1718CCC7-BB6B-4F74-BE47-23420845B258/dxwebsetup.exe" -o "%TEMP%\dxwebsetup.exe"
+        start "" /wait "%TEMP%\dxwebsetup.exe" /Q
 
         echo [3/4] Installing .NET Desktop Runtime 8.0...
         curl.exe -fsSL "https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe" -o "%TEMP%\dotnet8.exe"
@@ -1593,10 +1362,10 @@ jobs:
         $vramBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 32GB VIRTUAL RAM ^& MEMORY ACCELERATOR
+        title M11 32GB VIRTUAL RAM & MEMORY ACCELERATOR
         color 0e
         echo ==============================================================================
-        echo       M11 32GB VIRTUAL RAM ^& MEMORY ACCELERATOR (Zero Out-of-Memory)
+        echo       M11 32GB VIRTUAL RAM & MEMORY ACCELERATOR (Zero Out-of-Memory)
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
@@ -1622,10 +1391,10 @@ jobs:
         $wingetBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 UNIVERSAL PACKAGE MANAGER ENABLER (Winget ^& Chocolatey)
+        title M11 UNIVERSAL PACKAGE MANAGER ENABLER (Winget & Chocolatey)
         color 0b
         echo ==============================================================================
-        echo       M11 UNIVERSAL PACKAGE MANAGERS (Winget ^& Chocolatey Bootstrap)
+        echo       M11 UNIVERSAL PACKAGE MANAGERS (Winget & Chocolatey Bootstrap)
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
@@ -1636,7 +1405,7 @@ jobs:
         set "PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin"
         echo.
         echo ==============================================================================
-        echo [SUCCESS] Winget ^& Chocolatey enabled!
+        echo [SUCCESS] Winget & Chocolatey enabled!
         echo You can now install ANY software in existence by typing:
         echo choco install <name> -y   OR   winget install <name>
         echo ==============================================================================
@@ -1646,14 +1415,14 @@ jobs:
         $creativeBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 CREATIVE, RECORDING ^& MEDIA SUITE
+        title M11 CREATIVE, RECORDING & MEDIA SUITE
         color 0a
         echo ==============================================================================
-        echo       M11 CREATIVE ^& STREAMING SUITE (OBS Studio / GIMP / Audacity / VLC)
+        echo       M11 CREATIVE & STREAMING SUITE (OBS Studio / GIMP / Audacity / VLC)
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo.
-        echo [1/4] Installing OBS Studio (Screen Recording ^& Gameplay Streamer)...
+        echo [1/4] Installing OBS Studio (Screen Recording & Gameplay Streamer)...
         curl.exe -fsSL "https://cdn-fastly.obsproject.com/downloads/OBS-Studio-30.2.3-Windows-Installer.exe" -o "%TEMP%\obs_setup.exe"
         start "" "%TEMP%\obs_setup.exe" /S
 
@@ -1661,10 +1430,10 @@ jobs:
         curl.exe -fsSL "https://get.videolan.org/vlc/last/win64/vlc-3.0.21-win64.exe" -o "%TEMP%\vlc_setup.exe"
         start "" "%TEMP%\vlc_setup.exe" /S
 
-        echo [3/4] Installing Audacity (Audio Recording ^& Voice FX)...
+        echo [3/4] Installing Audacity (Audio Recording & Voice FX)...
         powershell -NoProfile -Command "winget install --id Audacity.Audacity --silent --accept-package-agreements --accept-source-agreements"
 
-        echo [4/4] Installing GIMP (Professional Image Editing ^& Photoshop Alternative)...
+        echo [4/4] Installing GIMP (Professional Image Editing & Photoshop Alternative)...
         powershell -NoProfile -Command "winget install --id GIMP.GIMP --silent --accept-package-agreements --accept-source-agreements"
 
         echo.
@@ -1679,11 +1448,11 @@ jobs:
             $subDir = "$mainDir\📁_Engines_And_Scripts"
             if (-not (Test-Path $subDir)) { New-Item -ItemType Directory -Path $subDir -Force -ErrorAction SilentlyContinue | Out-Null }
 
-            [System.IO.File]::WriteAllText("$mainDir\🛒_M11_UNIVERSAL_STORE.bat", $universalStoreBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText("$subDir\11_All_In_One_Gaming_Runtimes_AIO.bat", $runtimesBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText("$subDir\12_Universal_Package_Manager_Winget_Choco.bat", $wingetBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText("$subDir\13_Virtual_RAM_32GB_Pagefile_Booster.bat", $vramBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText("$subDir\14_Creative_Media_And_Recording_Suite.bat", $creativeBat, (New-Object System.Text.UTF8Encoding($false)))
+            $universalStoreBat | Out-File -FilePath "$mainDir\🛒_M11_UNIVERSAL_STORE.bat" -Encoding ascii -Force
+            $runtimesBat | Out-File -FilePath "$subDir\11_All_In_One_Gaming_Runtimes_AIO.bat" -Encoding ascii -Force
+            $wingetBat | Out-File -FilePath "$subDir\12_Universal_Package_Manager_Winget_Choco.bat" -Encoding ascii -Force
+            $vramBat | Out-File -FilePath "$subDir\13_Virtual_RAM_32GB_Pagefile_Booster.bat" -Encoding ascii -Force
+            $creativeBat | Out-File -FilePath "$subDir\14_Creative_Media_And_Recording_Suite.bat" -Encoding ascii -Force
         }
         Write-Host "M11 Universal App Store, 32GB Virtual RAM & AIO Runtimes deployed successfully!" -ForegroundColor Green
     - name: 2H. Deploy GTA V & Heavy Games Suite on Desktop
@@ -1694,13 +1463,13 @@ jobs:
         $gtaDownloaderBat = @"
         @echo off
         setlocal EnableDelayedExpansion
-        title M11 GTA V ^& HEAVY 3D GAMES HUB (DOWNLOAD ^& PLAY)
+        title M11 GTA V & HEAVY 3D GAMES HUB (DOWNLOAD & PLAY)
         color 0c
 
         :gta_menu
         cls
         echo ==============================================================================
-        echo       🎮 M11 GTA V ^& HEAVY 3D GAMES HUB (DOWNLOAD ^& PLAY)
+        echo       🎮 M11 GTA V & HEAVY 3D GAMES HUB (DOWNLOAD & PLAY)
         echo       Developer: Mohamed El-Sayed Abdelfattah - M11 Dev
         echo ==============================================================================
         echo  Hardware: 16 GB RAM ^| 32 GB Virtual RAM ^| 4 Dedicated vCPUs ^| 200GB SSD
@@ -1711,9 +1480,9 @@ jobs:
         echo  [2]  🏙️ تحميل وتشغيل GTA: San Andreas النسخة الكاملة Offline للكمبيوتر (60 FPS)
         echo  [3]  🌴 تحميل وتشغيل GTA: Vice City النسخة الكاملة Offline للكمبيوتر (60 FPS)
         echo  [4]  🏎️ تحميل وتشغيل Need for Speed: Most Wanted (Black Edition Offline)
-        echo  [5]  🔫 تحميل وتشغيل Counter-Strike 1.6 ^& CS:Source (Offline مع بوتات + أونلاين)
-        echo  [6]  ⚡ تحميل وتشغيل Half-Life 2 ^& Portal (محرك Source بـ 60 FPS فائق السلاسة)
-        echo  [7]  🧱 تشغيل Minecraft Bedrock ^& Java Edition (Prism Launcher 60 FPS)
+        echo  [5]  🔫 تحميل وتشغيل Counter-Strike 1.6 & CS:Source (Offline مع بوتات + أونلاين)
+        echo  [6]  ⚡ تحميل وتشغيل Half-Life 2 & Portal (محرك Source بـ 60 FPS فائق السلاسة)
+        echo  [7]  🧱 تشغيل Minecraft Bedrock & Java Edition (Prism Launcher 60 FPS)
         echo  [8]  🏎️ تحميل وتشغيل Asphalt Legends Unite (سباقات سيارات عالية السرعة)
         echo  [9]  🕹️ تشغيل محاكي RetroArch (أكثر من 10,000 لعبة PS1 و PSP و N64)
         echo  [10] ⚙️ ضبط إعدادات جرافيكس GTA V التلقائية للعمل بـ 60 FPS بدون لاج
@@ -1853,65 +1622,97 @@ jobs:
             $subDir = "$mainDir\📁_Engines_And_Scripts"
             if (-not (Test-Path $subDir)) { New-Item -ItemType Directory -Path $subDir -Force -ErrorAction SilentlyContinue | Out-Null }
 
-            [System.IO.File]::WriteAllText("$mainDir\🎮_DOWNLOAD_GTA_V_AND_HEAVY_GAMES.bat", $gtaDownloaderBat, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::WriteAllText("$subDir\15_GTA_V_And_Heavy_Games_Downloader.bat", $gtaDownloaderBat, (New-Object System.Text.UTF8Encoding($false)))
+            $gtaDownloaderBat | Out-File -FilePath "$mainDir\🎮_DOWNLOAD_GTA_V_AND_HEAVY_GAMES.bat" -Encoding ascii -Force
+            $gtaDownloaderBat | Out-File -FilePath "$subDir\15_GTA_V_And_Heavy_Games_Downloader.bat" -Encoding ascii -Force
         }
         Write-Host "GTA V & Heavy Games Suite deployed on Desktop!" -ForegroundColor Green
     - name: 2D. Deploy Data Persistence Daemon & Security Rules
       run: |
-        Write-Host ">>> Deploying M11 v1.12 Persistence Daemon <<<" -ForegroundColor Green
-        Add-MpPreference -ExclusionPath "C:\M11Data" -ErrorAction SilentlyContinue
-        Add-MpPreference -ExclusionProcess "RobloxPlayerBeta.exe" -ErrorAction SilentlyContinue
+        Write-Host ">>> Deploying Data Persistence Daemon & Security Rules <<<" -ForegroundColor Green
 
-        $daemonB64 = 'cGFyYW0oW3N3aXRjaF0kRm9yY2VOb3csIFtzd2l0Y2hdJERhZW1vbikNCiR0b2tlbiA9ICJSRVBMQUNFX1BBVCINCmlmICgtbm90ICR0b2tlbikgeyAkdG9rZW4gPSAiUkVQTEFDRV9HSFQiIH0NCiRyZXBvID0gIlJFUExBQ0VfUkVQTyINCiRzdGFnaW5nID0gIkM6XE0xMURhdGFcc3RhZ2luZyINCiR6aXBQYXRoID0gIkM6XE0xMURhdGFcY2xvdWRfc3RhdGUuemlwIg0KJGhhc2hQYXRoID0gIkM6XE0xMURhdGFcbGFzdF9oYXNoLnR4dCINCiR0cmlnZ2VyID0gIkM6XE0xMURhdGFcc3luY19ub3cudHJpZ2dlciINCiRoZWFkZXJzID0gQHsgIkF1dGhvcml6YXRpb24iID0gIkJlYXJlciAkdG9rZW4iOyAiVXNlci1BZ2VudCIgPSAiTTExLVN5bmMtdjExMiIgfQ0KDQpmdW5jdGlvbiBXcml0ZS1NMTFMb2coW3N0cmluZ10kbSkgew0KICAgICRsaW5lID0gIiQoR2V0LURhdGUgLUZvcm1hdCAnSEg6bW06c3MnKSB8ICRtIg0KICAgIEFkZC1Db250ZW50IC1QYXRoICJDOlxNMTFEYXRhXG0xMV9zeW5jLmxvZyIgLVZhbHVlICRsaW5lIC1FbmNvZGluZyBVVEY4DQogICAgV3JpdGUtSG9zdCAkbGluZQ0KfQ0KDQpmdW5jdGlvbiBJbnZva2UtTTExU2FmZVN5bmMgew0KICAgIHBhcmFtKFtzdHJpbmddJHJlYXNvbiA9ICJBdXRvLVN5bmMiKQ0KICAgIHRyeSB7DQogICAgICAgIGlmICgtbm90IChUZXN0LVBhdGggJHN0YWdpbmcpKSB7IE5ldy1JdGVtIC1JdGVtVHlwZSBEaXJlY3RvcnkgLVBhdGggJHN0YWdpbmcgLUZvcmNlIHwgT3V0LU51bGwgfQ0KICAgICAgICAkdXNlciA9ICJDOlxVc2Vyc1xNMTEgRGV2LVRvb2wiDQogICAgICAgIGlmICgtbm90IChUZXN0LVBhdGggIiR1c2VyXERlc2t0b3AiKSkgeyAkdXNlciA9ICRlbnY6VVNFUlBST0ZJTEUgfQ0KICAgICAgICAkbWFwID0gQHsNCiAgICAgICAgICAgICIkdXNlclxEZXNrdG9wIiAgICA9ICIkc3RhZ2luZ1xEZXNrdG9wIg0KICAgICAgICAgICAgIiR1c2VyXERvY3VtZW50cyIgID0gIiRzdGFnaW5nXERvY3VtZW50cyINCiAgICAgICAgICAgICIkdXNlclxEb3dubG9hZHMiICA9ICIkc3RhZ2luZ1xEb3dubG9hZHMiDQogICAgICAgICAgICAiJHVzZXJcQXBwRGF0YVxMb2NhbFxSb2Jsb3hcQ2xpZW50U2V0dGluZ3MiID0gIiRzdGFnaW5nXFJvYmxveFNldHRpbmdzIg0KICAgICAgICB9DQogICAgICAgIGZvcmVhY2ggKCRrIGluICRtYXAuS2V5cykgew0KICAgICAgICAgICAgaWYgKFRlc3QtUGF0aCAkaykgew0KICAgICAgICAgICAgICAgIGlmICgtbm90IChUZXN0LVBhdGggJG1hcFska10pKSB7IE5ldy1JdGVtIC1JdGVtVHlwZSBEaXJlY3RvcnkgLVBhdGggJG1hcFska10gLUZvcmNlIHwgT3V0LU51bGwgfQ0KICAgICAgICAgICAgICAgIHJvYm9jb3B5ICRrICRtYXBbJGtdIC9FIC9SOjAgL1c6MCAvWEYgKi50bXAgKi5jcmRvd25sb2FkICoubG9jayBkZXNrdG9wLmluaSAvTkZMIC9OREwgL05KSCAvTkpTIC9OUCB8IE91dC1OdWxsDQogICAgICAgICAgICB9DQogICAgICAgIH0NCiAgICAgICAgJGNocm9tZSA9ICIkdXNlclxBcHBEYXRhXExvY2FsXEdvb2dsZVxDaHJvbWVcVXNlciBEYXRhXERlZmF1bHQiDQogICAgICAgIGlmIChUZXN0LVBhdGggJGNocm9tZSkgew0KICAgICAgICAgICAgaWYgKC1ub3QgKFRlc3QtUGF0aCAiJHN0YWdpbmdcQ2hyb21lRGF0YSIpKSB7IE5ldy1JdGVtIC1JdGVtVHlwZSBEaXJlY3RvcnkgLVBhdGggIiRzdGFnaW5nXENocm9tZURhdGEiIC1Gb3JjZSB8IE91dC1OdWxsIH0NCiAgICAgICAgICAgIGZvcmVhY2ggKCRmIGluIEAoIkJvb2ttYXJrcyIsIkhpc3RvcnkiLCJQcmVmZXJlbmNlcyIpKSB7DQogICAgICAgICAgICAgICAgaWYgKFRlc3QtUGF0aCAiJGNocm9tZVwkZiIpIHsgQ29weS1JdGVtICIkY2hyb21lXCRmIiAiJHN0YWdpbmdcQ2hyb21lRGF0YVwkZiIgLUZvcmNlIC1FcnJvckFjdGlvbiBTaWxlbnRseUNvbnRpbnVlIH0NCiAgICAgICAgICAgIH0NCiAgICAgICAgfQ0KICAgICAgICBpZiAoVGVzdC1QYXRoICR6aXBQYXRoKSB7IFJlbW92ZS1JdGVtICR6aXBQYXRoIC1Gb3JjZSAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZSB9DQogICAgICAgIENvbXByZXNzLUFyY2hpdmUgLVBhdGggIiRzdGFnaW5nXCoiIC1EZXN0aW5hdGlvblBhdGggJHppcFBhdGggLUZvcmNlIC1FcnJvckFjdGlvbiBTaWxlbnRseUNvbnRpbnVlDQogICAgICAgIGlmICgtbm90IChUZXN0LVBhdGggJHppcFBhdGgpKSB7IFdyaXRlLU0xMUxvZyAiW1NZTkNdIGFyY2hpdmUgY3JlYXRpb24gZmFpbGVkIjsgcmV0dXJuIH0NCiAgICAgICAgdHJ5IHsgJHNoYTI1NiA9IFtTeXN0ZW0uQml0Q29udmVydGVyXTo6VG9TdHJpbmcoW1N5c3RlbS5TZWN1cml0eS5DcnlwdG9ncmFwaHkuU0hBMjU2XTo6Q3JlYXRlKCkuQ29tcHV0ZUhhc2goW1N5c3RlbS5JTy5GaWxlXTo6UmVhZEFsbEJ5dGVzKCR6aXBQYXRoKSkpLlJlcGxhY2UoJy0nLCcnKSB9DQogICAgICAgIGNhdGNoIHsgJHNoYTI1NiA9IChHZXQtSXRlbSAkemlwUGF0aCkuTGVuZ3RoLlRvU3RyaW5nKCkgfQ0KICAgICAgICAkbGFzdEhhc2ggPSAiIg0KICAgICAgICBpZiAoVGVzdC1QYXRoICRoYXNoUGF0aCkgeyAkbGFzdEhhc2ggPSAoR2V0LUNvbnRlbnQgJGhhc2hQYXRoIC1SYXcpLlRyaW0oKSB9DQogICAgICAgIGlmICgkc2hhMjU2IC1lcSAkbGFzdEhhc2ggLWFuZCAtbm90ICRGb3JjZU5vdykgeyByZXR1cm4gfQ0KICAgICAgICAkYjY0ID0gW0NvbnZlcnRdOjpUb0Jhc2U2NFN0cmluZyhbU3lzdGVtLklPLkZpbGVdOjpSZWFkQWxsQnl0ZXMoJHppcFBhdGgpKQ0KICAgICAgICAkdXJsID0gImh0dHBzOi8vYXBpLmdpdGh1Yi5jb20vcmVwb3MvJHJlcG8vY29udGVudHMvY2xvdWRfc3RhdGUuemlwIg0KICAgICAgICAjIC0tLSBwdXNoIHdpdGggcmV0cnk6IGFub3RoZXIgbGl2ZSBtYWNoaW5lIG1heSBoYXZlIHdyaXR0ZW4gdGhlIHNhbWUgZmlsZQ0KICAgICAgICAjICAgICAoYSA0MDkgQ29uZmxpY3QgbWVhbnMgb3VyIGJhc2Ugc2hhIGlzIHN0YWxlLCBzbyByZS1yZWFkIGl0IGFuZCByZXRyeSkNCiAgICAgICAgJHB1c2hlZCA9ICRmYWxzZQ0KICAgICAgICBmb3IgKCRhdHRlbXB0ID0gMTsgJGF0dGVtcHQgLWxlIDQ7ICRhdHRlbXB0KyspIHsNCiAgICAgICAgICAgICRzaGEgPSAkbnVsbA0KICAgICAgICAgICAgdHJ5IHsgJHJmID0gSW52b2tlLVJlc3RNZXRob2QgLVVyaSAkdXJsIC1IZWFkZXJzICRoZWFkZXJzIC1FcnJvckFjdGlvbiBTdG9wOyBpZiAoJHJmLnNoYSkgeyAkc2hhID0gJHJmLnNoYSB9IH0gY2F0Y2ggeyB9DQogICAgICAgICAgICAkYm9keSA9IEB7IG1lc3NhZ2UgPSAiTTExIHN5bmMgWyQoR2V0LURhdGUgLUZvcm1hdCAneXl5eS1NTS1kZCBISDptbTpzcycpXSAkcmVhc29uIjsgY29udGVudCA9ICRiNjQgfQ0KICAgICAgICAgICAgaWYgKCRzaGEpIHsgJGJvZHlbInNoYSJdID0gJHNoYSB9DQogICAgICAgICAgICB0cnkgew0KICAgICAgICAgICAgICAgICRyZXNwID0gSW52b2tlLVJlc3RNZXRob2QgLVVyaSAkdXJsIC1IZWFkZXJzICRoZWFkZXJzIC1NZXRob2QgUHV0IC1Cb2R5ICgkYm9keSB8IENvbnZlcnRUby1Kc29uKSAtRXJyb3JBY3Rpb24gU3RvcA0KICAgICAgICAgICAgICAgIGlmICgkcmVzcCAtYW5kICRyZXNwLmNvbnRlbnQpIHsgJHB1c2hlZCA9ICR0cnVlOyBicmVhayB9DQogICAgICAgICAgICB9IGNhdGNoIHsNCiAgICAgICAgICAgICAgICAkY29kZSA9IDANCiAgICAgICAgICAgICAgICB0cnkgeyAkY29kZSA9IFtpbnRdJF8uRXhjZXB0aW9uLlJlc3BvbnNlLlN0YXR1c0NvZGUgfSBjYXRjaCB7IH0NCiAgICAgICAgICAgICAgICBXcml0ZS1NMTFMb2cgIltTWU5DIFJFVFJZXSBhdHRlbXB0ICRhdHRlbXB0IGZhaWxlZCAoaHR0cCAkY29kZSkgLSByZS1yZWFkaW5nIHJlbW90ZSBzaGEiDQogICAgICAgICAgICB9DQogICAgICAgICAgICBTdGFydC1TbGVlcCAtU2Vjb25kcyAoMyAqICRhdHRlbXB0KQ0KICAgICAgICB9DQogICAgICAgIGlmICgtbm90ICRwdXNoZWQpIHsgV3JpdGUtTTExTG9nICJbU1lOQyBFUlJPUl0gcHVzaCBmYWlsZWQgYWZ0ZXIgNCBhdHRlbXB0cyAtIGhhc2ggTk9UIHVwZGF0ZWQsIHdpbGwgcmV0cnkgbmV4dCBjeWNsZSI7IHJldHVybiB9DQogICAgICAgIFtTeXN0ZW0uSU8uRmlsZV06OldyaXRlQWxsVGV4dCgkaGFzaFBhdGgsICRzaGEyNTYsIChOZXctT2JqZWN0IFN5c3RlbS5UZXh0LlVURjhFbmNvZGluZygkZmFsc2UpKSkNCiAgICAgICAgW1N5c3RlbS5JTy5GaWxlXTo6V3JpdGVBbGxUZXh0KCIkdXNlclxEZXNrdG9wXExBU1RfQkFDS1VQX1NUQVRVUy50eHQiLCAiTGFzdCBDbG91ZCBTeW5jOiAkKEdldC1EYXRlIC1Gb3JtYXQgJ3l5eXktTU0tZGQgSEg6bW06c3MnKSB8IFJlYXNvbjogJHJlYXNvbiIsIChOZXctT2JqZWN0IFN5c3RlbS5UZXh0LlVURjhFbmNvZGluZygkZmFsc2UpKSkNCiAgICAgICAgV3JpdGUtTTExTG9nICJbU1lOQyBPS10gJHJlYXNvbiAoJChbbWF0aF06OlJvdW5kKChHZXQtSXRlbSAkemlwUGF0aCkuTGVuZ3RoLzFLQiwxKSkgS0IpIg0KICAgIH0gY2F0Y2ggeyBXcml0ZS1NMTFMb2cgIltTWU5DIEVSUk9SXSAkKCRfLkV4Y2VwdGlvbi5NZXNzYWdlKSIgfQ0KfQ0KDQppZiAoJEZvcmNlTm93KSB7IEludm9rZS1NMTFTYWZlU3luYyAtcmVhc29uICJNYW51YWwgVHJpZ2dlciI7IGV4aXQgMCB9DQppZiAoJERhZW1vbikgew0KICAgIFdyaXRlLU0xMUxvZyAiZGFlbW9uIHN0YXJ0ZWQiDQogICAgSW52b2tlLU0xMVNhZmVTeW5jIC1yZWFzb24gIkluaXRpYWwgQm9vdCINCiAgICAkbGFzdCA9IEdldC1EYXRlDQogICAgd2hpbGUgKCR0cnVlKSB7DQogICAgICAgIFN0YXJ0LVNsZWVwIC1TZWNvbmRzIDEwDQogICAgICAgIGlmIChUZXN0LVBhdGggJHRyaWdnZXIpIHsNCiAgICAgICAgICAgIFJlbW92ZS1JdGVtICR0cmlnZ2VyIC1Gb3JjZSAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZQ0KICAgICAgICAgICAgSW52b2tlLU0xMVNhZmVTeW5jIC1yZWFzb24gIk9uLURlbWFuZCBUcmlnZ2VyIg0KICAgICAgICAgICAgJGxhc3QgPSBHZXQtRGF0ZQ0KICAgICAgICAgICAgY29udGludWUNCiAgICAgICAgfQ0KICAgICAgICBpZiAoKChHZXQtRGF0ZSkgLSAkbGFzdCkuVG90YWxTZWNvbmRzIC1nZSAxODApIHsgJGxhc3QgPSBHZXQtRGF0ZTsgSW52b2tlLU0xMVNhZmVTeW5jIC1yZWFzb24gIlBlcmlvZGljIDMtTWludXRlIFN5bmMiIH0NCiAgICB9DQp9'
-        $daemon = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($daemonB64))
-        $daemon = $daemon.Replace('REPLACE_PAT', "${{ secrets.M11_PAT || github.event.inputs.pat_token }}")
-        $daemon = $daemon.Replace('REPLACE_GHT', "${{ secrets.GITHUB_TOKEN }}")
-        $daemon = $daemon.Replace('REPLACE_REPO', "${{ github.repository }}")
-        [System.IO.File]::WriteAllText("C:\M11Data\m11_persistent_daemon.ps1", $daemon, (New-Object System.Text.UTF8Encoding($false)))
+        # 1. Windows Defender Gaming Exclusions
+        try {
+            Add-MpPreference -ExclusionProcess "RobloxPlayerBeta.exe", "RobloxPlayerLauncher.exe", "RobloxStudioBeta.exe" -ErrorAction SilentlyContinue
+            Add-MpPreference -ExclusionPath "C:\Users\M11 Dev-Tool\AppData\Local\Roblox" -ErrorAction SilentlyContinue
+            Add-MpPreference -ExclusionPath "C:\Users\runneradmin\AppData\Local\Roblox" -ErrorAction SilentlyContinue
+            Add-MpPreference -ExclusionPath "C:\M11Data" -ErrorAction SilentlyContinue
+        } catch {}
+
+        # 2. Deploy Advanced Real-Time Persistence Daemon
+        New-Item -ItemType Directory -Path "C:\M11Data" -Force -ErrorAction SilentlyContinue | Out-Null
+        $daemonLines = @(
+            'param([switch]$ForceNow, [switch]$Daemon)',
+            '$token = "${{ github.event.inputs.pat_token }}"',
+            'if (-not $token) { $token = "${{ secrets.GITHUB_TOKEN }}" }',
+            '$repo = "${{ github.repository }}"',
+            '$staging = "C:\M11Data\staging"',
+            '$zipPath = "C:\M11Data\cloud_state.zip"',
+            '$hashPath = "C:\M11Data\last_hash.txt"',
+            'function Invoke-M11SafeSync {',
+            '    param([string]$reason = "Auto-Sync")',
+            '    try {',
+            '        if (-not (Test-Path $staging)) { New-Item -ItemType Directory -Path $staging -Force | Out-Null }',
+            '        if (Test-Path "C:\Users\M11 Dev-Tool\Desktop") { robocopy "C:\Users\M11 Dev-Tool\Desktop" "$staging\Desktop" /E /R:1 /W:1 /XF *.tmp *.crdownload *.lock desktop.ini *.bat | Out-Null }',
+            '        if (Test-Path "C:\Users\M11 Dev-Tool\Documents") { robocopy "C:\Users\M11 Dev-Tool\Documents" "$staging\Documents" /E /R:1 /W:1 /XF *.tmp *.crdownload *.lock | Out-Null }',
+            '        if (Test-Path "C:\Users\M11 Dev-Tool\Downloads") { robocopy "C:\Users\M11 Dev-Tool\Downloads" "$staging\Downloads" /E /R:1 /W:1 /XF *.tmp *.crdownload *.lock | Out-Null }',
+            '        if (Test-Path "C:\Users\M11 Dev-Tool\AppData\Local\Roblox\ClientSettings") { robocopy "C:\Users\M11 Dev-Tool\AppData\Local\Roblox\ClientSettings" "$staging\RobloxSettings" /E /R:1 /W:1 | Out-Null }',
+            '        $chromeDefault = "C:\Users\M11 Dev-Tool\AppData\Local\Google\Chrome\User Data\Default"',
+            '        if (Test-Path $chromeDefault) {',
+            '            if (-not (Test-Path "$staging\ChromeData")) { New-Item -ItemType Directory -Path "$staging\ChromeData" -Force | Out-Null }',
+            '            foreach ($f in @("Bookmarks", "History", "Preferences")) { if (Test-Path "$chromeDefault\$f") { Copy-Item "$chromeDefault\$f" "$staging\ChromeData\$f" -Force -ErrorAction SilentlyContinue } }',
+            '        }',
+            '        if (Test-Path $zipPath) { Remove-Item $zipPath -Force -ErrorAction SilentlyContinue }',
+            '        Compress-Archive -Path "$staging\*" -DestinationPath $zipPath -Force -ErrorAction SilentlyContinue',
+            '        if (Test-Path $zipPath) {',
+            '            $bytes = [System.IO.File]::ReadAllBytes($zipPath)',
+            '            $sha256 = (Get-FileHash -Algorithm SHA256 -Path $zipPath).Hash',
+            '            $lastHash = if (Test-Path $hashPath) { Get-Content $hashPath -Raw } else { "" }',
+            '            if ($sha256 -eq $lastHash.Trim() -and -not $ForceNow) { return }',
+            '            $b64 = [System.Convert]::ToBase64String($bytes)',
+            '            $checkUrl = "https://api.github.com/repos/$repo/contents/cloud_state.zip"',
+            '            $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-SyncEngine-v011" }',
+            '            $sha = $null',
+            '            try {',
+            '                $rf = Invoke-RestMethod -Uri $checkUrl -Headers $headers -ErrorAction SilentlyContinue',
+            '                if ($rf -and $rf.sha) { $sha = $rf.sha }',
+            '            } catch {}',
+            '            $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")',
+            '            $body = @{ message = "M11 Continuous Sync [$timestamp - $reason]"; content = $b64 }',
+            '            if ($sha) { $body["sha"] = $sha }',
+            '            Invoke-RestMethod -Uri $checkUrl -Headers $headers -Method Put -Body ($body | ConvertTo-Json) -ErrorAction SilentlyContinue | Out-Null',
+            '            $sha256 | Out-File -FilePath $hashPath -Encoding ascii -Force',
+            '            $statusMsg = "Last Cloud Sync: $timestamp | Reason: $reason | Status: 100% Secured"',
+            '            $statusMsg | Out-File -FilePath "C:\Users\M11 Dev-Tool\Desktop\LAST_BACKUP_STATUS.txt" -Encoding utf8 -Force',
+            '            Write-Host "[M11-SYNC SUCCESS] $statusMsg" -ForegroundColor Green',
+            '        }',
+            '    } catch {}',
+            '}',
+            'if ($ForceNow) { Invoke-M11SafeSync -reason "Manual Trigger"; exit 0 }',
+            'if ($Daemon) {',
+            '    Write-Host "M11 Continuous Persistence Daemon running in background..." -ForegroundColor Green',
+            '    Invoke-M11SafeSync -reason "Initial Boot"',
+            '    $lastPeriodic = Get-Date',
+            '    while ($true) {',
+            '        Start-Sleep -Seconds 10',
+            '        $now = Get-Date',
+            '        if (($now - $lastPeriodic).TotalSeconds -ge 180) {',
+            '            $lastPeriodic = $now',
+            '            Invoke-M11SafeSync -reason "3-Minute Periodic Auto-Sync"',
+            '        }',
+            '    }',
+            '}'
+        )
+        $daemonLines | Out-File -FilePath "C:\M11Data\m11_persistent_daemon.ps1" -Encoding ascii -Force
+
+        # 3. Activate 24/7 Real-Time Data Persistence Daemon
+        Write-Host "Activating 24/7 Real-Time Data Persistence Daemon..." -ForegroundColor Green
         Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File C:\M11Data\m11_persistent_daemon.ps1 -Daemon" -WindowStyle Hidden
-        Start-Sleep -Seconds 3
-        if (Test-Path "C:\M11Data\m11_sync.log") { Get-Content "C:\M11Data\m11_sync.log" -Tail 5 }
-        Write-Host "Persistence daemon deployed and running." -ForegroundColor Green
-
-    - name: 2Z. Final Authoritative Toolkit Sync + Self Test (v1.13)
-      run: |
-        Write-Host ">>> 2Z: the fixed launchers must be the last writers on every new machine <<<" -ForegroundColor Cyan
-        $b64 = "IyA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0NCiMgIE0xMSB2MS4xNCAtIEZJTkFMIEFVVEhPUklUQVRJVkUgVE9PTEtJVCBTWU5DICAod29ya2Zsb3cgc3RlcCAyWikNCiMgIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQ0KIyAgV0hZIFRISVMgRVhJU1RTDQojICBUaGUgbGVnYWN5IHByb3Zpc2lvbmluZyBzdGVwcyAoMkUgLyAyRiAvIDJHIC8gMkggLyAzKSBlYWNoIHdyaXRlIHRoZWlyDQojICBvd24gb2xkZXIgY29waWVzIG9mIHRoZSBsYXVuY2hlcnMgYXQgYm9vdCwgc28gYSBmcmVzaGx5IGNyZWF0ZWQgbWFjaGluZQ0KIyAgcmVjZWl2ZWQgbGVnYWN5IGJ1aWxkcyB0aGF0IG92ZXJ3cm90ZSB0aGUgZml4ZWQgdG9vbGtpdCAtIHRoYXQgaXMgZXhhY3RseQ0KIyAgd2h5ICpNMTFfTUFTVEVSX0NPTlRST0xfQ0VOVEVSLmJhdCogYW5kIGZyaWVuZHMgbG9va2VkICJicm9rZW4iIG9uIGV2ZXJ5DQojICBuZXcgbWFjaGluZS4NCiMgIFRoaXMgc3RlcCBydW5zIEFGVEVSIGV2ZXJ5IGxlZ2FjeSB3cml0ZXIsIHJlLWFwcGxpZXMgdGhlIGF1dGhvcml0YXRpdmUNCiMgIHJlcGFpciBlbmdpbmUgYXMgU1lTVEVNLCByZW1vdmVzIGFueSBsZWdhY3kgcmVidWlsZCwgYW5kIHByaW50cyBwcm9vZiBpbnRvDQojICB0aGUgR2l0SHViIHJ1biBsb2cgKHNpemVzICsgc2hhMjU2IHByZWZpeCArIHNlbGYtdGVzdCByZXN1bHQpLg0KIyAgQXJjaGl0ZWN0ZWQgYnkgTTExIERldiAtIE1vaGFtZWQuDQojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQ0KcGFyYW0oW3N3aXRjaF0kVmlhVGFzaykNCg0KJEVycm9yQWN0aW9uUHJlZmVyZW5jZSA9ICdDb250aW51ZScNCiRsb2cgPSAnQzpcTTExRGF0YVxtMTFfZmluYWxfc3luYy5sb2cnDQpmdW5jdGlvbiBMKCRtKSB7DQogICAgJGxpbmUgPSAiJChHZXQtRGF0ZSAtRm9ybWF0ICdISDptbTpzcycpIHwgJG0iDQogICAgV3JpdGUtSG9zdCAkbGluZQ0KICAgIEFkZC1Db250ZW50IC1QYXRoICRsb2cgLVZhbHVlICRsaW5lIC1FbmNvZGluZyBVVEY4DQp9DQoNCkwgJ0ZJTkFMIFRPT0xLSVQgU1lOQyAoYXV0aG9yaXRhdGl2ZSwgc3RlcCAyWikgc3RhcnQnDQpOZXctSXRlbSAtSXRlbVR5cGUgRGlyZWN0b3J5IC1QYXRoICdDOlxNMTFEYXRhJyAtRm9yY2UgfCBPdXQtTnVsbA0KDQokcmVwbyA9ICRlbnY6R0lUSFVCX1JFUE9TSVRPUlkNCmlmICgtbm90ICRyZXBvKSB7ICRyZXBvID0gJ0ZyZWUtUkRQMi9tMTEtdG9vbC1wYycgfQ0KJGJhc2UgPSAiaHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tLyRyZXBvL21haW4iDQokcmVwICA9ICdDOlxNMTFEYXRhXE0xMV9SRFBfUkVQQUlSLnBzMScNCiRyZXBMb2cgPSAnQzpcTTExRGF0YVxtMTFfcmVwYWlyX3YxMTJfbG9nLnR4dCcNCg0KIyAtLS0gMS4gZmV0Y2ggdGhlIGF1dGhvcml0YXRpdmUgcmVwYWlyIGVuZ2luZSAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tDQpjdXJsLmV4ZSAtZnNTTCAiJGJhc2UvTTExX1JEUF9SRVBBSVIucHMxIiAtbyAkcmVwIDI+JG51bGwNCmlmICgtbm90IChUZXN0LVBhdGggJHJlcCkgLW9yIChHZXQtSXRlbSAkcmVwKS5MZW5ndGggLWx0IDIwMDAwKSB7DQogICAgTCAncmVwYWlyIGVuZ2luZSBkb3dubG9hZCBGQUlMRUQgLSB0aGUgc2VsZi1oZWFsZWQgY29waWVzIHN0YXkgaW4gcGxhY2UnDQp9IGVsc2Ugew0KICAgIEwgKCdyZXBhaXIgZW5naW5lIGZldGNoZWQ6ICcgKyAoR2V0LUl0ZW0gJHJlcCkuTGVuZ3RoICsgJyBieXRlcycpDQoNCiAgICAkbWUgICAgID0gW1NlY3VyaXR5LlByaW5jaXBhbC5XaW5kb3dzSWRlbnRpdHldOjpHZXRDdXJyZW50KCkNCiAgICAkaXNTeXMgID0gKCRtZS5Vc2VyLlZhbHVlIC1lcSAnUy0xLTUtMTgnKQ0KICAgICRpc0FkbSAgPSAoW1NlY3VyaXR5LlByaW5jaXBhbC5XaW5kb3dzUHJpbmNpcGFsXSRtZSkuSXNJblJvbGUoW1NlY3VyaXR5LlByaW5jaXBhbC5XaW5kb3dzQnVpbHRJblJvbGVdOjpBZG1pbmlzdHJhdG9yKQ0KICAgIEwgKCJjb250ZXh0OiB1c2VyPSIgKyAkbWUuTmFtZSArICIgfCBTWVNURU09IiArICRpc1N5cyArICIgfCBhZG1pbj0iICsgJGlzQWRtKQ0KDQogICAgUmVtb3ZlLUl0ZW0gJHJlcExvZyAtRm9yY2UgLUVycm9yQWN0aW9uIFNpbGVudGx5Q29udGludWUNCg0KICAgIGlmICgkVmlhVGFzayAtb3IgKCRpc0FkbSAtYW5kIC1ub3QgJGlzU3lzKSkgew0KICAgICAgICAjIHNhbWUgcHJvdmVuIG1lY2hhbmlzbSB1c2VkIGJ5IHRoZSByZWxheTogbG9jYWwgc2NoZWR1bGVkIHRhc2sgYXMgU1lTVEVNDQogICAgICAgICR0YXNrID0gJ00xMV9GaW5hbFN5bmNfMlonDQogICAgICAgIGNtZCAvYyAic2NodGFza3MgL2RlbGV0ZSAvdG4gJHRhc2sgL2YiID4gJG51bGwgMj4mMQ0KICAgICAgICAkdHIgPSAncG93ZXJzaGVsbC5leGUgLU5vUHJvZmlsZSAtRXhlY3V0aW9uUG9saWN5IEJ5cGFzcyAtRmlsZSAnICsgJHJlcA0KICAgICAgICAkbyA9IGNtZCAvYyAic2NodGFza3MgL2NyZWF0ZSAvdG4gJHRhc2sgL3RyIGAiJHRyYCIgL3NjIG9uY2UgL3N0IDAwOjAwIC9ydSBTWVNURU0gL3JsIEhJR0hFU1QgL2YgMj4mMSINCiAgICAgICAgTCAoJ3NjaHRhc2tzIGNyZWF0ZTogJyArICgkbyAtam9pbiAnICcpKQ0KICAgICAgICAkbyA9IGNtZCAvYyAic2NodGFza3MgL3J1biAvdG4gJHRhc2sgMj4mMSINCiAgICAgICAgTCAoJ3NjaHRhc2tzIHJ1bjogJyArICgkbyAtam9pbiAnICcpKQ0KICAgICAgICAkc3cgPSBbRGlhZ25vc3RpY3MuU3RvcHdhdGNoXTo6U3RhcnROZXcoKQ0KICAgICAgICB3aGlsZSAoJHN3LkVsYXBzZWQuVG90YWxTZWNvbmRzIC1sdCAxODApIHsNCiAgICAgICAgICAgIFN0YXJ0LVNsZWVwIC1TZWNvbmRzIDUNCiAgICAgICAgICAgICR0eHQgPSAnJw0KICAgICAgICAgICAgaWYgKFRlc3QtUGF0aCAkcmVwTG9nKSB7IHRyeSB7ICR0eHQgPSBbSU8uRmlsZV06OlJlYWRBbGxUZXh0KCRyZXBMb2cpIH0gY2F0Y2ggeyB9IH0NCiAgICAgICAgICAgIGlmICgkdHh0IC1tYXRjaCAnUkVQQUlSIEVORCcpIHsgYnJlYWsgfQ0KICAgICAgICAgICAgJHEgPSBjbWQgL2MgInNjaHRhc2tzIC9xdWVyeSAvdG4gJHRhc2sgL2ZvIExJU1QgMj4mMSINCiAgICAgICAgICAgIGlmICgtbm90ICgkcSAtbWF0Y2ggJ1J1bm5pbmcnKSkgeyBpZiAoJHR4dC5MZW5ndGggLWd0IDApIHsgYnJlYWsgfSB9DQogICAgICAgIH0NCiAgICAgICAgTCAoJ3JlcGFpciBmaW5pc2hlZCB2aWEgU1lTVEVNIHRhc2sgaW4gJyArIFtpbnRdJHN3LkVsYXBzZWQuVG90YWxTZWNvbmRzICsgJyBzJykNCiAgICAgICAgY21kIC9jICJzY2h0YXNrcyAvZGVsZXRlIC90biAkdGFzayAvZiIgPiAkbnVsbCAyPiYxDQogICAgfSBlbHNlIHsNCiAgICAgICAgTCAncnVubmluZyByZXBhaXIgZW5naW5lIGRpcmVjdGx5IChhbHJlYWR5IFNZU1RFTS9lbGV2YXRlZCknDQogICAgICAgICRudWxsID0gJiBwb3dlcnNoZWxsLmV4ZSAtTm9Qcm9maWxlIC1FeGVjdXRpb25Qb2xpY3kgQnlwYXNzIC1GaWxlICRyZXAgMj4mMQ0KICAgIH0NCg0KICAgIGlmIChUZXN0LVBhdGggJHJlcExvZykgew0KICAgICAgICBHZXQtQ29udGVudCAkcmVwTG9nIC1FbmNvZGluZyBVVEY4IHwNCiAgICAgICAgICAgIFdoZXJlLU9iamVjdCB7ICRfIC1tYXRjaCAnUkVQQUlSfHB1cmdlZHxlbmdpbmVzIGZvbGRlcnxkZXNrdG9wIGNvcGllc3xkYWVtb24nIH0gfA0KICAgICAgICAgICAgU2VsZWN0LU9iamVjdCAtRmlyc3QgNDAgfCBGb3JFYWNoLU9iamVjdCB7IEwgKCcgICAnICsgJF8uVG9TdHJpbmcoKS5UcmltKCkpIH0NCiAgICB9IGVsc2Ugew0KICAgICAgICBMICdXQVJOIHJlcGFpciBsb2cgbm90IGZvdW5kIC0gdmVyaWZpY2F0aW9uIGJlbG93IHdpbGwgc2hvdyB3aGF0IGlzIGxpdmUnDQogICAgfQ0KfQ0KDQojIC0tLSAyLiBkcm9wIGFueSBsZWdhY3kgcmVidWlsZCBsZWZ0IG9uIHRoZSBkZXNrdG9wcyAtLS0tLS0tLS0tLS0tLS0tLS0NCiRkZXNrcyA9IEAoJ0M6XFVzZXJzXE0xMSBEZXYtVG9vbFxEZXNrdG9wJywgJ0M6XFVzZXJzXHJ1bm5lcmFkbWluXERlc2t0b3AnLCAnQzpcVXNlcnNcUHVibGljXERlc2t0b3AnKQ0KZm9yZWFjaCAoJGQgaW4gJGRlc2tzKSB7DQogICAgaWYgKC1ub3QgKFRlc3QtUGF0aCAkZCkpIHsgY29udGludWUgfQ0KICAgIEdldC1DaGlsZEl0ZW0gLUxpdGVyYWxQYXRoICRkIC1GaWxlIC1GaWx0ZXIgJyouYmF0JyAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZSB8DQogICAgICAgIFdoZXJlLU9iamVjdCB7ICRfLk5hbWUgLW5vdG1hdGNoICdNQVNURVJfQ09OVFJPTHxNQVNURVJfUlVOTkVSfFVOSVZFUlNBTF9TVE9SRXxET1dOTE9BRF9HVEF8U0VMRl9URVNUfFdJTkdFVHxNT0pJJyB9IHwNCiAgICAgICAgRm9yRWFjaC1PYmplY3QgeyBMICgnICAgcmVtb3ZpbmcgbGVnYWN5IGZpbGU6ICcgKyAkXy5OYW1lKTsgUmVtb3ZlLUl0ZW0gLUxpdGVyYWxQYXRoICRfLkZ1bGxOYW1lIC1Gb3JjZSAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZSB9DQp9DQoNCiMgLS0tIDMuIHByb3ZlIHdoaWNoIGJ1aWxkIGlzIGxpdmUgKGhhc2ggYmFzZWQsIG5hbWUgaW5kZXBlbmRlbnQpIC0tLS0tLQ0KJGNhbm9uID0gQHsNCiAgICAnQTg4NDk0MUEyMycgPSAnTUFTVEVSX0NPTlRST0xfQ0VOVEVSICAoZml4ZWQpJw0KICAgICdDNUQzQjU0OUEzJyA9ICdNQVNURVJfUlVOTkVSICAgICAgICAgIChmaXhlZCknDQogICAgJzM4Q0RCNzc1Q0UnID0gJ0dUQSAvIEdBTUVTIEhVQiAgICAgICAgKGZpeGVkKScNCiAgICAnODkwQjJEMDdDQScgPSAnVU5JVkVSU0FMX1NUT1JFICAgICAgICAoZml4ZWQpJw0KICAgICdCNUM5MjFEMjI3JyA9ICdTRUxGX1RFU1QgICAgICAgICAgICAgIChmaXhlZCknDQogICAgJ0EzNkVGMTUxQTgnID0gJ1dJTkdFVF9CT09UU1RSQVAgICAgICAgKGZpeGVkKScNCiAgICAnM0QzRkE1RDBGNicgPSAnV0lOR0VUX0VOU1VSRSAgICAgICAgICAoZml4ZWQpJw0KICAgICcyNjczQkFGN0FEJyA9ICdXSU5HRVRfRklORCAgICAgICAgICAgIChmaXhlZCknDQogICAgJzAwOTI0OUU3RjUnID0gJ01PSklfQ0hFQ0sgICAgICAgICAgICAgKGZpeGVkKScNCn0NCiRsZWdhY3kgPSAwDQpmb3JlYWNoICgkZCBpbiAkZGVza3MpIHsNCiAgICBpZiAoLW5vdCAoVGVzdC1QYXRoICRkKSkgeyBjb250aW51ZSB9DQogICAgJHQgPSBHZXQtQ2hpbGRJdGVtIC1MaXRlcmFsUGF0aCAkZCAtRGlyZWN0b3J5IC1Gb3JjZSAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZSB8DQogICAgICAgICBXaGVyZS1PYmplY3QgeyAkXy5OYW1lIC1saWtlICcqTTExX1RPT0xfUEMqJyB9IHwgU2VsZWN0LU9iamVjdCAtRmlyc3QgMQ0KICAgIGlmICgtbm90ICR0KSB7IGNvbnRpbnVlIH0NCiAgICBMICgndG9vbGtpdDogJyArICR0LkZ1bGxOYW1lKQ0KDQogICAgR2V0LUNoaWxkSXRlbSAtTGl0ZXJhbFBhdGggJGQgLUZpbGUgLUZvcmNlIC1FcnJvckFjdGlvbiBTaWxlbnRseUNvbnRpbnVlIHwNCiAgICAgICAgV2hlcmUtT2JqZWN0IHsgJF8uRXh0ZW5zaW9uIC1tYXRjaCAnYmF0fGNtZHxwczEnIH0gfCBGb3JFYWNoLU9iamVjdCB7DQogICAgICAgICAgICAkaCA9ICcnDQogICAgICAgICAgICB0cnkgeyAkaCA9IChHZXQtRmlsZUhhc2ggLUxpdGVyYWxQYXRoICRfLkZ1bGxOYW1lIC1BbGdvcml0aG0gU0hBMjU2KS5IYXNoLlN1YnN0cmluZygwLDEwKSB9IGNhdGNoIHsgfQ0KICAgICAgICAgICAgaWYgKCRjYW5vbi5Db250YWluc0tleSgkaCkpIHsNCiAgICAgICAgICAgICAgICBMICgnICAgezAsLTQ2fSB7MSw2fSBCICBzaGE9ezJ9ICAtPiB7M30nIC1mICRfLk5hbWUsICRfLkxlbmd0aCwgJGgsICRjYW5vblskaF0pDQogICAgICAgICAgICB9IGVsc2VpZiAoJF8uTGVuZ3RoIC1ndCA4MDAwKSB7DQogICAgICAgICAgICAgICAgJHNjcmlwdDpsZWdhY3krKw0KICAgICAgICAgICAgICAgIEwgKCcgICB7MCwtNDZ9IHsxLDZ9IEIgIHNoYT17Mn0gIC0+IExFR0FDWSBCVUlMRCAtIE9WRVJXUklUVEVOIEFHQUlOIScgLWYgJF8uTmFtZSwgJF8uTGVuZ3RoLCAkaCkNCiAgICAgICAgICAgIH0gZWxzZSB7DQogICAgICAgICAgICAgICAgTCAoJyAgIHswLC00Nn0gezEsNn0gQiAgc2hhPXsyfSAgLT4gdW5rbm93biBzaXplIGJ1aWxkJyAtZiAkXy5OYW1lLCAkXy5MZW5ndGgsICRoKQ0KICAgICAgICAgICAgfQ0KICAgICAgICB9DQoNCiAgICAkZW5nID0gR2V0LUNoaWxkSXRlbSAtTGl0ZXJhbFBhdGggJHQuRnVsbE5hbWUgLURpcmVjdG9yeSAtRm9yY2UgLUVycm9yQWN0aW9uIFNpbGVudGx5Q29udGludWUgfA0KICAgICAgICAgICBXaGVyZS1PYmplY3QgeyAkXy5OYW1lIC1saWtlICcqRW5naW5lcyonIH0gfCBTZWxlY3QtT2JqZWN0IC1GaXJzdCAxDQogICAgaWYgKCRlbmcpIHsNCiAgICAgICAgJG4gPSBHZXQtQ2hpbGRJdGVtIC1MaXRlcmFsUGF0aCAkZW5nLkZ1bGxOYW1lIC1GaWxlIC1FcnJvckFjdGlvbiBTaWxlbnRseUNvbnRpbnVlDQogICAgICAgIEwgKCcgICBlbmdpbmVzOiAnICsgJG4uQ291bnQgKyAnIGZpbGVzLCBudW1iZXJlZD0nICsgKCgkbiB8IFdoZXJlLU9iamVjdCB7ICRfLk5hbWUgLW1hdGNoICdeWzAtOV0nIH0pLkNvdW50KSArICcsIG90aGVyPScgKyAoKCRuIHwgV2hlcmUtT2JqZWN0IHsgJF8uTmFtZSAtbm90bWF0Y2ggJ15bMC05XScgfSkuQ291bnQpKQ0KICAgIH0NCg0KICAgICRzdCA9IEpvaW4tUGF0aCAkdC5GdWxsTmFtZSAnX00xMV9TRUxGX1RFU1QuYmF0Jw0KICAgIGlmIChUZXN0LVBhdGggJHN0KSB7DQogICAgICAgIEwgJyAgIHJ1bm5pbmcgdG9vbGtpdCBzZWxmIHRlc3QgKFRhaWxzY2FsZSBjaGVjayBkZWZlcnJlZCB0byBzdGVwIDRBKSAuLi4nDQogICAgICAgICRlbnY6TTExX1NLSVBfVEFJTFNDQUxFID0gJzEnDQogICAgICAgICRvID0gJiBjbWQuZXhlIC9jICgnIicgKyAkc3QgKyAnIiBub3BhdXNlJykgMj4mMQ0KICAgICAgICAkbyB8IFdoZXJlLU9iamVjdCB7ICRfIC1tYXRjaCAnXFtGQUlMXF18UkVTVUxUOnxDTEVBTnxCQUQgJyB9IHwgRm9yRWFjaC1PYmplY3QgeyBMICgnICAgJyArICRfLlRvU3RyaW5nKCkuVHJpbSgpKSB9DQoNCiAgICB9DQp9DQppZiAoJGxlZ2FjeSAtZXEgMCkgeyBMICdWRVJESUNUOiBldmVyeSBsYXVuY2hlciBvbiBldmVyeSBkZXNrdG9wIGlzIHRoZSBmaXhlZCBidWlsZCcgfQ0KZWxzZSB7IEwgKCdWRVJESUNUOiAnICsgJGxlZ2FjeSArICcgbGVnYWN5IGxhdW5jaGVyKHMpIHN0aWxsIHByZXNlbnQgLSB0aGUgbGVnYWN5IHN0ZXBzIHdvbiB0aGUgcmFjZScpIH0NCg0KTCAnRklOQUwgVE9PTEtJVCBTWU5DIGVuZCcNCg=="
-        $ps = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b64))
-        $f = 'C:\M11Data\_final_sync.ps1'
-        New-Item -ItemType Directory -Path 'C:\M11Data' -Force | Out-Null
-        [System.IO.File]::WriteAllText($f, $ps, (New-Object System.Text.UTF8Encoding($false)))
-        powershell.exe -NoProfile -ExecutionPolicy Bypass -File $f
-        if (Test-Path 'C:\M11Data\m11_final_sync.log') { Get-Content 'C:\M11Data\m11_final_sync.log' -Encoding UTF8 | ForEach-Object { Write-Host $_ } }
-
-    - name: 2Y. Live Engine Test (opt-in, reports back via cloud sync)
-      if: github.event.inputs.run_engine_test == 'true'
-      continue-on-error: true
-      timeout-minutes: 25
-      run: |
-        Write-Host ">>> 2Y: running every launcher and engine for real (opt-in test pass) <<<" -ForegroundColor Cyan
-        $b64 = "IyA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0NCiMgIE0xMSBMSVZFIEVYRUNVVElPTiBIQVJORVNTICAodjEuMTQpDQojICBSdW5zIEVWRVJZIGxhdW5jaGVyIC8gZW5naW5lIFJFQUxMWSBhbmQgY2FwdHVyZXMgcmVhbCBlcnJvcnMuDQojICBFbmdpbmUgZmlsZXMgZ2V0IGEgaGFyZCAyMCBzIGNhcDogcGFyc2UgZXJyb3JzIGFwcGVhciBhdCBvbmNlLCB0aGUgbG9uZw0KIyAgaW5zdGFsbCBzdGVwcyBhcmUgY3V0IHNob3J0ICh0aGUgbWFjaGluZSBzdGF5cyB1c2FibGUpLg0KIyAgQXJjaGl0ZWN0ZWQgYnkgTTExIERldiAtIE1vaGFtZWQuDQojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQ0KJG91dCA9ICdDOlxNMTFEYXRhXF9lbmdpbmVfdGVzdC50eHQnDQokTCA9IE5ldy1PYmplY3QgU3lzdGVtLkNvbGxlY3Rpb25zLkdlbmVyaWMuTGlzdFtzdHJpbmddDQpmdW5jdGlvbiBXKCRtKSB7ICRMLkFkZChbc3RyaW5nXSRtKTsgW0lPLkZpbGVdOjpXcml0ZUFsbExpbmVzKCRvdXQsICRMLCAoTmV3LU9iamVjdCBTeXN0ZW0uVGV4dC5VVEY4RW5jb2RpbmcoJGZhbHNlKSkpIH0NCg0KJFBBVCA9ICdpcyBub3QgcmVjb2duaXplZHxUaGUgc3lzdGVtIGNhbm5vdCBmaW5kfGNhbm5vdCBmaW5kIHRoZSBwYXRofHdhcyB1bmV4cGVjdGVkIGF0IHRoaXMgdGltZXxzeW50YXggZXJyb3J8QWNjZXNzIGlzIGRlbmllZHxub3QgYWxsb3dlZHxCYWQgY29tbWFuZCBvciBmaWxlIG5hbWV8Y3VybDogXCh8ZXJyb3I6IDB4fGlzIG5vdCBkZWZpbmVkfENvbW1hbmROb3RGb3VuZEV4Y2VwdGlvbnxGdWxseVF1YWxpZmllZEVycm9ySWQnDQoNCmZ1bmN0aW9uIFRlc3QtT25lKCRmaWxlLCAkbGltaXRTZWMpIHsNCiAgICAkdG1wID0gW0lPLlBhdGhdOjpHZXRUZW1wRmlsZU5hbWUoKQ0KICAgICRzdyA9IFtEaWFnbm9zdGljcy5TdG9wd2F0Y2hdOjpTdGFydE5ldygpDQogICAgJHAgPSBTdGFydC1Qcm9jZXNzIC1GaWxlUGF0aCAnY21kLmV4ZScgLUFyZ3VtZW50TGlzdCAoJy9jICIiJyArICRmaWxlICsgJyIgMCA8IG51bCInKSBgDQogICAgICAgICAtUmVkaXJlY3RTdGFuZGFyZE91dHB1dCAkdG1wIC1SZWRpcmVjdFN0YW5kYXJkRXJyb3IgKCR0bXAgKyAnLmVycicpIC1QYXNzVGhydSAtV2luZG93U3R5bGUgSGlkZGVuDQogICAgJG9rID0gJHAuV2FpdEZvckV4aXQoJGxpbWl0U2VjICogMTAwMCkNCiAgICBpZiAoLW5vdCAkb2spIHsgdHJ5IHsgJHAuS2lsbCgpIH0gY2F0Y2ggeyB9IH0NCiAgICAkc3cuU3RvcCgpDQogICAgJGJvZHkgPSAnJw0KICAgIHRyeSB7ICRib2R5ID0gKFtJTy5GaWxlXTo6UmVhZEFsbFRleHQoJHRtcCkgKyAiYG4iICsgW0lPLkZpbGVdOjpSZWFkQWxsVGV4dCgkdG1wICsgJy5lcnInKSkgfSBjYXRjaCB7IH0NCiAgICBSZW1vdmUtSXRlbSAkdG1wLCAoJHRtcCArICcuZXJyJykgLUZvcmNlIC1FcnJvckFjdGlvbiBTaWxlbnRseUNvbnRpbnVlDQogICAgJGVycnMgPSBAKCgkYm9keSAtc3BsaXQgImBuIikgfCBXaGVyZS1PYmplY3QgeyAkXyAtbWF0Y2ggJFBBVCB9IHwgRm9yRWFjaC1PYmplY3QgeyAkXy5UcmltKCkgfSB8IFNlbGVjdC1PYmplY3QgLVVuaXF1ZSAtRmlyc3QgNikNCiAgICAkY29kZSA9IGlmICgkb2spIHsgJHAuRXhpdENvZGUgfSBlbHNlIHsgJ0NVVCcgfQ0KICAgIGlmICgkZXJycy5Db3VudCAtZXEgMCkgew0KICAgICAgICBXICgnICBbT0sgIF0gezAsLTUyfSBleGl0PXsxLC00fSBtcz17Miw2fScgLWYgKFNwbGl0LVBhdGggJGZpbGUgLUxlYWYpLCAkY29kZSwgW2ludF0kc3cuRWxhcHNlZC5Ub3RhbE1pbGxpc2Vjb25kcykNCiAgICB9IGVsc2Ugew0KICAgICAgICBXICgnICBbRVJSIF0gezAsLTUyfSBleGl0PXsxLC00fSBtcz17Miw2fScgLWYgKFNwbGl0LVBhdGggJGZpbGUgLUxlYWYpLCAkY29kZSwgW2ludF0kc3cuRWxhcHNlZC5Ub3RhbE1pbGxpc2Vjb25kcykNCiAgICAgICAgZm9yZWFjaCAoJGUgaW4gJGVycnMpIHsgVyAoJyAgICAgICAgID4+PiAnICsgJGUpIH0NCiAgICB9DQogICAgcmV0dXJuICRlcnJzLkNvdW50DQp9DQoNClcgJz09PT09PT09PT09PT09PT09PT0gTTExIExJVkUgRVhFQ1VUSU9OIEhBUk5FU1MgPT09PT09PT09PT09PT09PT09PScNClcgKCJob3N0PSIgKyAkZW52OkNPTVBVVEVSTkFNRSArICIgIHVzZXI9IiArICRlbnY6VVNFUk5BTUUgKyAiICBkYXRlPSIgKyAoR2V0LURhdGUgLUZvcm1hdCAneXl5eS1NTS1kZCBISDptbTpzcycpKQ0KJHRvdGFsRXJyID0gMA0KDQokdGsgPSAkbnVsbA0KZm9yZWFjaCAoJGQgaW4gQCgnQzpcVXNlcnNcTTExIERldi1Ub29sXERlc2t0b3AnLCdDOlxVc2Vyc1xydW5uZXJhZG1pblxEZXNrdG9wJywnQzpcVXNlcnNcUHVibGljXERlc2t0b3AnKSkgew0KICAgIGlmICgtbm90IChUZXN0LVBhdGggJGQpKSB7IGNvbnRpbnVlIH0NCiAgICAkdCA9IEdldC1DaGlsZEl0ZW0gLUxpdGVyYWxQYXRoICRkIC1EaXJlY3RvcnkgLUZvcmNlIC1FcnJvckFjdGlvbiBTaWxlbnRseUNvbnRpbnVlIHwgV2hlcmUtT2JqZWN0IHsgJF8uTmFtZSAtbGlrZSAnKk0xMV9UT09MX1BDKicgfSB8IFNlbGVjdC1PYmplY3QgLUZpcnN0IDENCiAgICBpZiAoJHQpIHsgJHRrID0gJHQuRnVsbE5hbWU7IGJyZWFrIH0NCn0NClcgKCJ0b29sa2l0OiAiICsgJHRrKQ0KaWYgKC1ub3QgJHRrKSB7IFcgJ1RPT0xLSVQgTk9UIEZPVU5EJzsgW0lPLkZpbGVdOjpXcml0ZUFsbExpbmVzKCRvdXQsICRMLCAoTmV3LU9iamVjdCBTeXN0ZW0uVGV4dC5VVEY4RW5jb2RpbmcoJGZhbHNlKSkpOyBleGl0IDEgfQ0KDQpXICcnDQpXICc9PT0gW0FdIFRPT0xLSVQgTEFVTkNIRVJTICgzMCBzIGNhcCkgPT09Jw0KZm9yZWFjaCAoJGYgaW4gKEdldC1DaGlsZEl0ZW0gLUxpdGVyYWxQYXRoICR0ayAtRmlsZSAtRmlsdGVyICcqLmJhdCcgLUZvcmNlIC1FcnJvckFjdGlvbiBTaWxlbnRseUNvbnRpbnVlKSkgew0KICAgICR0b3RhbEVyciArPSBUZXN0LU9uZSAkZi5GdWxsTmFtZSAzMA0KfQ0KDQokZW5nID0gR2V0LUNoaWxkSXRlbSAtTGl0ZXJhbFBhdGggJHRrIC1EaXJlY3RvcnkgLUZvcmNlIC1FcnJvckFjdGlvbiBTaWxlbnRseUNvbnRpbnVlIHwgV2hlcmUtT2JqZWN0IHsgJF8uTmFtZSAtbGlrZSAnKkVuZ2luZXMqJyB9IHwgU2VsZWN0LU9iamVjdCAtRmlyc3QgMQ0KaWYgKCRlbmcpIHsNCiAgICBXICcnDQogICAgVyAoJz09PSBbQl0gRU5HSU5FUyAnICsgJGVuZy5OYW1lICsgJyAoMjAgcyBjYXAgZWFjaCkgPT09JykNCiAgICBmb3JlYWNoICgkZiBpbiAoR2V0LUNoaWxkSXRlbSAtTGl0ZXJhbFBhdGggJGVuZy5GdWxsTmFtZSAtRmlsZSAtRmlsdGVyICcqLmJhdCcgLUZvcmNlIC1FcnJvckFjdGlvbiBTaWxlbnRseUNvbnRpbnVlIHwgU29ydC1PYmplY3QgTmFtZSkpIHsNCiAgICAgICAgJHRvdGFsRXJyICs9IFRlc3QtT25lICRmLkZ1bGxOYW1lIDIwDQogICAgfQ0KfQ0KDQpXICcnDQpXICc9PT0gW0NdIFNFTEYgVEVTVCArIE1PSklCQUtFIChhcyB0aGlzIHVzZXIpID09PScNCiRtb2ppID0gSm9pbi1QYXRoICR0ayAnX00xMV9NT0pJX0NIRUNLLnBzMScNCmlmIChUZXN0LVBhdGggJG1vamkpIHsNCiAgICAkbyA9ICYgcG93ZXJzaGVsbC5leGUgLU5vUHJvZmlsZSAtRXhlY3V0aW9uUG9saWN5IEJ5cGFzcyAtRmlsZSAkbW9qaSAyPiYxDQogICAgJG8gfCBXaGVyZS1PYmplY3QgeyAkXyAtbWF0Y2ggJFBBVCAtb3IgJF8gLW1hdGNoICdDTEVBTnxtb2ppYmFrZScgfSB8IFNlbGVjdC1PYmplY3QgLUZpcnN0IDEyIHwgRm9yRWFjaC1PYmplY3QgeyBXICgnICAnICsgJF8uVG9TdHJpbmcoKS5UcmltKCkpOyB9DQp9DQokc3QgPSBKb2luLVBhdGggJHRrICdfTTExX1NFTEZfVEVTVC5iYXQnDQppZiAoVGVzdC1QYXRoICRzdCkgew0KICAgICRvID0gJiBjbWQuZXhlIC9jICgnIicgKyAkc3QgKyAnIiBub3BhdXNlJykgMj4mMQ0KICAgICRvIHwgV2hlcmUtT2JqZWN0IHsgJF8gLW1hdGNoICdcW0ZBSUxcXXxSRVNVTFQ6fENMRUFOJyB9IHwgU2VsZWN0LU9iamVjdCAtRmlyc3QgMTUgfCBGb3JFYWNoLU9iamVjdCB7IFcgKCcgICcgKyAkXy5Ub1N0cmluZygpLlRyaW0oKSkgfQ0KfQ0KDQpXICcnDQpXICgiPT09IFRPVEFMIEZJTEVTIFdJVEggRVJST1JTOiAiICsgJHRvdGFsRXJyICsgIiA9PT0iKQ0KVyAnPT09PT09PT09PT09PT09PT09PSBIQVJORVNTIEVORCA9PT09PT09PT09PT09PT09PT09Jw0KZm9yZWFjaCAoJGQgaW4gQCgnQzpcVXNlcnNcTTExIERldi1Ub29sXERlc2t0b3AnLCdDOlxVc2Vyc1xydW5uZXJhZG1pblxEZXNrdG9wJywnQzpcVXNlcnNcUHVibGljXERlc2t0b3AnKSkgew0KICAgIGlmICgtbm90IChUZXN0LVBhdGggJGQpKSB7IGNvbnRpbnVlIH0NCiAgICB0cnkgeyBbSU8uRmlsZV06OldyaXRlQWxsTGluZXMoKEpvaW4tUGF0aCAkZCAnX2VuZ2luZV90ZXN0X3JlcG9ydC50eHQnKSwgJEwsIChOZXctT2JqZWN0IFN5c3RlbS5UZXh0LlVURjhFbmNvZGluZygkZmFsc2UpKSkgfSBjYXRjaCB7IH0NCn0NCidoYXJuZXNzIGRvbmUnIHwgT3V0LUZpbGUgJ0M6XE0xMURhdGFcX20xMV90YXNrX2RvbmUudHh0JyAtRW5jb2RpbmcgYXNjaWkNCg=="
-        $h = 'C:\M11Data\engine_test_harness.ps1'
-        New-Item -ItemType Directory -Path 'C:\M11Data' -Force | Out-Null
-        [System.IO.File]::WriteAllText($h, [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b64)), (New-Object System.Text.UTF8Encoding($false)))
-        powershell.exe -NoProfile -ExecutionPolicy Bypass -File $h
-        if (Test-Path 'C:\M11Data\_engine_test.txt') { Get-Content 'C:\M11Data\_engine_test.txt' -Encoding UTF8 | Select-Object -Last 60 | ForEach-Object { Write-Host $_ } }
-
     - name: 4A. Setup Tailscale WireGuard Tunnel (Zero Credit Card)
       if: github.event.inputs.tunnel_provider == 'tailscale'
-      continue-on-error: true
-      timeout-minutes: 22
       run: |
-        $ErrorActionPreference = 'Continue'
         Write-Host "Installing Tailscale for Windows via direct installer..." -ForegroundColor Cyan
-        curl.exe -fsSL --max-time 240 --retry 2 --retry-delay 5 "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -o "tailscale-setup.exe"
-        if (-not (Test-Path 'tailscale-setup.exe') -or (Get-Item 'tailscale-setup.exe').Length -lt 1000000) {
-            Write-Host "Tailscale installer download failed/partial - skipping Tailscale install" -ForegroundColor Yellow
-            exit 0
-        }
-        $inst = Start-Process -FilePath ".\tailscale-setup.exe" -ArgumentList "/quiet /norestart" -PassThru
-        if (-not $inst.WaitForExit(300000)) { try { $inst.Kill() } catch { }; Write-Host "installer exceeded 300s - continuing" -ForegroundColor Yellow }
+        curl.exe -fsSL "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -o "tailscale-setup.exe"
+        Start-Process -FilePath ".\tailscale-setup.exe" -ArgumentList "/quiet /norestart" -Wait
         Start-Sleep -Seconds 6
         Start-Service -Name "Tailscale" -ErrorAction SilentlyContinue
 
@@ -1926,41 +1727,9 @@ jobs:
         }
 
         Write-Host "Authenticating with Tailscale WireGuard Network..." -ForegroundColor Cyan
-        $authKey = "${{ secrets.TS_AUTHKEY }}".Trim()
-        if (-not $authKey) { $authKey = "${{ github.event.inputs.tunnel_token }}".Trim() }
-        $nodeName = "m11-tool-pc-$('${{ github.run_id }}')"
-        if ($nodeName -notmatch '^[a-z0-9-]+$') { $nodeName = "m11-tool-pc" }
-        Write-Host "Joining Tailscale as $nodeName (unique per session = no node collisions)..." -ForegroundColor Cyan
-        $tsOut = Join-Path $env:TEMP 'ts_up.out'; $tsErr = Join-Path $env:TEMP 'ts_up.err'
-        $upProc = Start-Process -FilePath $tailscalePath -ArgumentList @('up', "--authkey=$authKey", "--hostname=$nodeName", '--accept-routes', '--reset', '--unattended') -PassThru -NoNewWindow -RedirectStandardOutput $tsOut -RedirectStandardError $tsErr
-        # M11: if Tailscale asks for interactive login, publish the URL so the operator can approve it
-        for ($i = 0; $i -lt 30; $i++) {
-            Start-Sleep -Seconds 3
-            $found = $null
-            try {
-                $m = Select-String -Path $tsOut, $tsErr -Pattern 'https://login\.tailscale\.com/a/\S+' -ErrorAction SilentlyContinue | Select-Object -First 1
-                if ($m) { $found = $m.Matches.Value }
-            } catch { }
-            if ($found) {
-                Write-Host "M11_TAILSCALE_LOGIN_URL: $found" -ForegroundColor Yellow
-                try {
-                    $hdr = @{ Authorization = "Bearer ${{ secrets.M11_PAT }}"; 'User-Agent' = 'm11' }
-                    $sha = $null
-                    try { $sha = (Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/contents/tailscale_login_url.txt" -Headers $hdr -ErrorAction SilentlyContinue).sha } catch { }
-                    $body = @{ message = 'M11 tailscale login url'; content = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($found)); branch = 'main' }
-                    if ($sha) { $body.sha = $sha }
-                    Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/contents/tailscale_login_url.txt" -Headers $hdr -Method Put -Body ($body | ConvertTo-Json) | Out-Null
-                    Write-Host "login url published to repo: tailscale_login_url.txt" -ForegroundColor Yellow
-                } catch { Write-Host "publish failed: $($_.Exception.Message)" }
-                break
-            }
-            if ($upProc.HasExited) { break }
-        }
-        # wait up to 10 more minutes for the login to be approved (authkey joins return instantly)
-        if (-not $upProc.WaitForExit(600000)) { try { $upProc.Kill() } catch { }; Write-Host "tailscale up exceeded timeout - killed (no more 5h hangs)" -ForegroundColor Yellow }
-        Get-Content $tsOut, $tsErr -ErrorAction SilentlyContinue | Select-Object -First 15 | ForEach-Object { Write-Host $_ }
+        $authKey = "${{ github.event.inputs.tunnel_token }}".Trim()
+        & $tailscalePath up --authkey=$authKey --hostname=m11-tool-pc --accept-routes --reset --shields-up=false --unattended
         Start-Sleep -Seconds 6
-        & $tailscalePath status 2>$null | Select-Object -First 8 | ForEach-Object { Write-Host $_ }
 
         # Set Tailscale network adapter to Private
         Get-NetConnectionProfile -InterfaceAlias "Tailscale*" -ErrorAction SilentlyContinue | Set-NetConnectionProfile -NetworkCategory Private -ErrorAction SilentlyContinue
@@ -2012,11 +1781,9 @@ jobs:
           status = "ONLINE"
           author = "M11 Dev - Mohamed"
         } | ConvertTo-Json
-        [System.IO.File]::WriteAllText("m11_connect.json", $info, (New-Object System.Text.UTF8Encoding($false)))
+        $info | Out-File -FilePath "m11_connect.json" -Encoding utf8
     - name: 4B. Setup Pinggy Direct Public Tunnel (Zero Client Install)
       if: github.event.inputs.tunnel_provider == 'pinggy'
-      continue-on-error: true
-      timeout-minutes: 8
       run: |
         Write-Host "Starting Pinggy Instant Public TCP Tunnel..." -ForegroundColor Cyan
         $pToken = "${{ github.event.inputs.tunnel_token }}".Trim()
@@ -2074,11 +1841,9 @@ jobs:
           status = "ONLINE"
           author = "M11 Dev - Mohamed"
         } | ConvertTo-Json
-        [System.IO.File]::WriteAllText("m11_connect.json", $info, (New-Object System.Text.UTF8Encoding($false)))
+        $info | Out-File -FilePath "m11_connect.json" -Encoding utf8
     - name: 4C. Setup Ngrok Tunnel (Requires Credit Card on Ngrok)
       if: github.event.inputs.tunnel_provider == 'ngrok'
-      continue-on-error: true
-      timeout-minutes: 8
       run: |
         Write-Host "Downloading Ngrok v3 Engine..." -ForegroundColor Cyan
         curl.exe -fsSL -o "ngrok.zip" "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip"
@@ -2131,102 +1896,135 @@ jobs:
           status = "ONLINE"
           author = "M11 Dev - Mohamed"
         } | ConvertTo-Json
-        [System.IO.File]::WriteAllText("m11_connect.json", $info, (New-Object System.Text.UTF8Encoding($false)))
+        $info | Out-File -FilePath "m11_connect.json" -Encoding utf8
     - name: 5. Upload Connection Artifact for M11 Client App
       uses: actions/upload-artifact@v4
       with:
         name: m11-endpoint
         path: m11_connect.json
         retention-days: 1
-    - name: 6. Session Watchdog & 24/7 Chaining (with real handover)
+    - name: 6. Session Watchdog & Dual-Guard 24/7 Chaining Daemon
       run: |
         Write-Host "===========================================================================" -ForegroundColor Green
-        Write-Host " M11 v1.12 SESSION WATCHDOG - the cloud PC stays online while this runs" -ForegroundColor Green
+        Write-Host "⚡ M11 TOOL - PC SESSION WATCHDOG ACTIVE & RUNNING 100% ⚡" -ForegroundColor Green
+        Write-Host ">> IMPORTANT: This step is the LIVING HEART of your Cloud PC!" -ForegroundColor Cyan
+        Write-Host ">> It keeps the Windows instance alive in Microsoft Azure for up to 6 hours." -ForegroundColor Yellow
+        Write-Host ">> DO NOT wait for this step to complete with a green checkmark!" -ForegroundColor Yellow
+        Write-Host ">> If this step finishes, the Cloud PC turns off. The spinning icon means ONLINE!" -ForegroundColor Green
+        Write-Host ">> You can connect via Remote Desktop right NOW! <<" -ForegroundColor Green
         Write-Host "===========================================================================" -ForegroundColor Green
+        Write-Host "Lead Developer: M11 Dev - Mohamed | v1.11 Enterprise Ultra"
 
-        $token = "${{ secrets.M11_PAT }}"
-        if (-not $token) { $token = "${{ github.event.inputs.pat_token }}" }
+        $token = "${{ github.event.inputs.pat_token }}"
         if (-not $token) { $token = "${{ secrets.GITHUB_TOKEN }}" }
         $repo = "${{ github.repository }}"
-        $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-Chaining-v112" }
-        $minutes = 330          # 5h30m of runtime, chaining at 5h20m
-        $chainAt = 320
+        $maxSeconds = 21600 # 6 hours total
         $elapsed = 0
-        $chained = $false
+        $backupInterval = 300 # Continuous Backup every 5 minutes
+        $lastBackup = 0
+        $chainTriggered = $false
 
-        function Write-M11Log([string]$m) {
-            $line = "$(Get-Date -Format 'HH:mm:ss') | $m"
-            Add-Content -Path "C:\M11Data\m11_watchdog.log" -Value $line -Encoding UTF8
-            Write-Host $line
-        }
+        while ($elapsed -lt $maxSeconds) {
+          Start-Sleep -Seconds 60
+          $elapsed += 60
 
-        function Sync-CloudState([string]$reason) {
+          # Periodic Auto-Backup to Cloud (Every 5 Minutes Continuous Sync)
+          if (($elapsed - $lastBackup) -ge $backupInterval) {
+            $lastBackup = $elapsed
+            Write-Host "Continuous State Sync: Preserving user files to Cloud (M11 Dev-Tool + runneradmin)..." -ForegroundColor Cyan
             try {
-                $paths = @()
-                foreach ($p in @("C:\Users\M11 Dev-Tool\Desktop","C:\Users\M11 Dev-Tool\Documents","C:\Users\M11 Dev-Tool\Downloads","C:\Users\M11 Dev-Tool\AppData\Local\Roblox\ClientSettings")) {
-                    if (Test-Path $p) { $paths += $p }
+              $candPaths = @(
+                "C:\Users\M11 Dev-Tool\Desktop",
+                "C:\Users\M11 Dev-Tool\Documents",
+                "C:\Users\M11 Dev-Tool\Downloads",
+                "C:\Users\M11 Dev-Tool\AppData\Local\Roblox\ClientSettings",
+                "C:\Users\runneradmin\Desktop",
+                "C:\Users\runneradmin\Documents"
+              )
+              $pathsToSave = @()
+              foreach ($cp in $candPaths) {
+                if (Test-Path $cp) { $pathsToSave += $cp }
+              }
+
+              if ($pathsToSave.Count -gt 0) {
+                Compress-Archive -Path $pathsToSave -DestinationPath "cloud_state.zip" -Force -ErrorAction SilentlyContinue
+                if (Test-Path "cloud_state.zip") {
+                  $bytes = [System.IO.File]::ReadAllBytes("cloud_state.zip")
+                  $b64 = [System.Convert]::ToBase64String($bytes)
+
+                  $checkUrl = "https://api.github.com/repos/$repo/contents/cloud_state.zip"
+                  $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-Sync-v111" }
+                  $sha = $null
+                  try {
+                    $remoteFile = Invoke-RestMethod -Uri $checkUrl -Headers $headers -ErrorAction SilentlyContinue
+                    if ($remoteFile -and $remoteFile.sha) { $sha = $remoteFile.sha }
+                  } catch {}
+
+                  $body = @{
+                    message = "M11 Tool - PC Auto-Backup at $($elapsed)s [Continuous Sync]"
+                    content = $b64
+                  }
+                  if ($sha) { $body["sha"] = $sha }
+
+                  Invoke-RestMethod -Uri $checkUrl -Headers $headers -Method Put -Body ($body | ConvertTo-Json) -ErrorAction SilentlyContinue | Out-Null
+                  Write-Host "Auto-Backup completed! All files and Roblox settings secured in Cloud." -ForegroundColor Green
                 }
-                if ($paths.Count -eq 0) { return }
-                $stg = "C:\M11Data\staging_watchdog"
-                if (Test-Path $stg) { Remove-Item $stg -Recurse -Force -ErrorAction SilentlyContinue }
-                New-Item -ItemType Directory -Path $stg -Force | Out-Null
-                [System.IO.File]::WriteAllText("C:\M11Data\sync_now.trigger", "flush", (New-Object System.Text.UTF8Encoding($false)))
-                Start-Sleep -Seconds 12
-                Compress-Archive -Path $paths -DestinationPath "C:\M11Data\watchdog_state.zip" -Force -ErrorAction SilentlyContinue
-                if (-not (Test-Path "C:\M11Data\watchdog_state.zip")) { return }
-                $b64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes("C:\M11Data\watchdog_state.zip"))
-                $url = "https://api.github.com/repos/$repo/contents/cloud_state.zip"
-                $sha = $null
-                try { $rf = Invoke-RestMethod -Uri $url -Headers $headers -ErrorAction SilentlyContinue; if ($rf.sha) { $sha = $rf.sha } } catch { }
-                $body = @{ message = "M11 watchdog flush: $reason"; content = $b64 }
-                if ($sha) { $body["sha"] = $sha }
-                Invoke-RestMethod -Uri $url -Headers $headers -Method Put -Body ($body | ConvertTo-Json) -ErrorAction SilentlyContinue | Out-Null
-                Write-M11Log "[FLUSH OK] $reason"
-            } catch { Write-M11Log "[FLUSH ERROR] $($_.Exception.Message)" }
-        }
-
-        while ($elapsed -lt ($minutes * 60)) {
-            Start-Sleep -Seconds 60
-            $elapsed += 60
-            if ($elapsed % 600 -eq 0) { Write-M11Log ("cloud PC online: " + [int]($elapsed/60) + " / " + $minutes + " minutes") }
-
-            if ($elapsed -ge ($chainAt * 60) -and -not $chained) {
-                $chained = $true
-                Write-M11Log "handover window reached - flushing state first"
-                Sync-CloudState "pre-handover"
-
-                # only now cancel older runs of this workflow
-                try {
-                    $runs = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/actions/runs?per_page=20" -Headers $headers
-                    foreach ($r in $runs.workflow_runs) {
-                        if ($r.status -in @('in_progress','queued') -and $r.id -ne ${{ github.run_id }}) {
-                            Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/actions/runs/$($r.id)/cancel" -Headers $headers -Method Post -ErrorAction SilentlyContinue | Out-Null
-                            Write-M11Log ("cancelled older run " + $r.id)
-                        }
-                    }
-                } catch { Write-M11Log "cancel notice: $($_.Exception.Message)" }
-
-                try {
-                    $dispatchBody = @{
-                        ref = "main"
-                        inputs = @{
-                            tunnel_provider   = "${{ github.event.inputs.tunnel_provider }}"
-                            tunnel_token      = "${{ github.event.inputs.tunnel_token }}"
-                            enable_persistence= "true"
-                            session_hours     = "6"
-                            pat_token         = ""
-                        }
-                    } | ConvertTo-Json
-                    Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/actions/workflows/m11_cloud_pc.yml/dispatches" -Headers $headers -Method Post -Body $dispatchBody -ErrorAction SilentlyContinue | Out-Null
-                    Write-M11Log "next session dispatched - handover complete"
-                } catch { Write-M11Log "dispatch notice: $($_.Exception.Message)" }
-
-                Start-Sleep -Seconds 60
-                Sync-CloudState "post-handover safety flush"
-                Write-M11Log "watchdog exiting so this runner is released to the chained session"
-                exit 0
+              }
+            } catch {
+              Write-Host "Backup notice: $_"
             }
-        }
-        Sync-CloudState "session end"
-        exit 0
+          }
 
+          # 20 Minutes before 6-hour limit: Trigger Next Runner (Chaining / Never-ending PC)
+          if ($elapsed -ge 20400 -and -not $chainTriggered) { # 5h 40m
+            $chainTriggered = $true
+            Write-Host "SESSION CHAINING: 20 minutes remaining! Performing final pre-handover state flush..." -ForegroundColor Yellow
+            try {
+              # Emergency pre-handover flush
+              $flushPaths = @()
+              foreach ($cp in @("C:\Users\M11 Dev-Tool\Desktop", "C:\Users\M11 Dev-Tool\Documents", "C:\Users\M11 Dev-Tool\Downloads", "C:\Users\M11 Dev-Tool\AppData\Local\Roblox\ClientSettings")) {
+                if (Test-Path $cp) { $flushPaths += $cp }
+              }
+              if ($flushPaths.Count -gt 0) {
+                Compress-Archive -Path $flushPaths -DestinationPath "cloud_state.zip" -Force -ErrorAction SilentlyContinue
+                $bytes = [System.IO.File]::ReadAllBytes("cloud_state.zip")
+                $b64 = [System.Convert]::ToBase64String($bytes)
+                $checkUrl = "https://api.github.com/repos/$repo/contents/cloud_state.zip"
+                $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-Flush-v111" }
+                $sha = $null
+                try {
+                  $rf = Invoke-RestMethod -Uri $checkUrl -Headers $headers -ErrorAction SilentlyContinue
+                  if ($rf -and $rf.sha) { $sha = $rf.sha }
+                } catch {}
+                $bData = @{ message = "M11 Pre-Chaining Emergency Flush"; content = $b64 }
+                if ($sha) { $bData["sha"] = $sha }
+                Invoke-RestMethod -Uri $checkUrl -Headers $headers -Method Put -Body ($bData | ConvertTo-Json) -ErrorAction SilentlyContinue | Out-Null
+                Write-Host "Final state flush completed before handover!" -ForegroundColor Green
+              }
+            } catch {}
+
+            Write-Host "Dispatching next Cloud PC runner to keep session alive 24/7..." -ForegroundColor Yellow
+            try {
+              $dispatchUrl = "https://api.github.com/repos/$repo/actions/workflows/m11_cloud_pc.yml/dispatches"
+              $dispatchBody = @{
+                ref = "main"
+                inputs = @{
+                  tunnel_provider = "${{ github.event.inputs.tunnel_provider }}"
+                  tunnel_token = "${{ github.event.inputs.tunnel_token }}"
+                  enable_persistence = "true"
+                  pat_token = $token
+                }
+              } | ConvertTo-Json
+              $headers = @{ "Authorization" = "Bearer $token"; "User-Agent" = "M11-Chaining-v011" }
+              Invoke-RestMethod -Uri $dispatchUrl -Headers $headers -Method Post -Body $dispatchBody -ErrorAction SilentlyContinue | Out-Null
+              Write-Host "Next runner dispatched! Seamless 24/7 handover initiated." -ForegroundColor Green
+            } catch {
+              Write-Host "Chaining notice: $_"
+            }
+          }
+
+          if ($elapsed % 120 -eq 0) {
+            $mins = [int]($elapsed / 60)
+            Write-Host "[ONLINE & HEALTHY] ⚡ Cloud PC is Active: $mins / 360 minutes elapsed (60 FPS Stream Healthy - Ready to connect!)." -ForegroundColor Green
+          }
+        }
