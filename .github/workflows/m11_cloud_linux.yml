@@ -474,27 +474,24 @@ jobs:
         # If Tailscale key was expired/single-use or pending, auto-deploy Pinggy instant public tunnel as fallback!
         if [ -z "$IP" ] || [ "$IP" = "127.0.0.1" ]; then
           echo "[NOTICE] Tailscale Auth Key inactive or single-use. Activating Pinggy Instant Public Tunnel fallback..."
-          ssh -p 443 -R0:localhost:3389 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -T a.pinggy.io > /tmp/pinggy_rdp.log 2>&1 &
+          ssh -p 443 -R0:localhost:3389 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -T tcp@a.pinggy.io > /tmp/pinggy_rdp.log 2>&1 &
           ssh -p 443 -R0:localhost:6080 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -T a.pinggy.io > /tmp/pinggy_web.log 2>&1 &
           sleep 8
-          ENDPOINT=$(grep -oE 'tcp://[^ ]+' /tmp/pinggy_rdp.log | head -n 1)
-          if [ -z "$ENDPOINT" ]; then
-              ENDPOINT=$(grep -oE '[a-zA-Z0-9.-]+\.a\.pinggy\.link:[0-9]+' /tmp/pinggy_rdp.log | head -n 1)
-          fi
-          WEB_HOST=$(grep -oE 'https://[a-zA-Z0-9.-]+\.a\.pinggy\.link' /tmp/pinggy_web.log | head -n 1)
+          ENDPOINT=$(grep -oE 'tcp://[a-zA-Z0-9.-]+:[0-9]+' /tmp/pinggy_rdp.log | head -n 1)
+          WEB_HOST=$(grep -oE 'https://[a-zA-Z0-9.-]+\.(free\.pinggy\.net|pinggy-free\.link|pinggy\.link)' /tmp/pinggy_web.log | head -n 1)
           CLEAN=$(echo "$ENDPOINT" | sed 's/tcp:\/\///')
           HOST=$(echo "$CLEAN" | cut -d':' -f1)
           PORT=$(echo "$CLEAN" | cut -d':' -f2)
           if [ -n "$WEB_HOST" ]; then
-            WEB_URL="${WEB_HOST}/vnc.html"
+            WEB_URL="${WEB_HOST}/vnc.html?autoconnect=true&resize=scale"
           else
-            WEB_URL="http://${HOST}:6080/vnc.html"
+            WEB_URL="http://${HOST}:6080/vnc.html?autoconnect=true&resize=scale"
           fi
         else
           ENDPOINT="$IP:3389"
           HOST="$IP"
           PORT="3389"
-          WEB_URL="http://$HOST:6080/vnc.html"
+          WEB_URL="http://$HOST:6080/vnc.html?autoconnect=true&resize=scale"
         fi
 
         echo "======================================================"
@@ -523,26 +520,25 @@ jobs:
       run: |
         echo "Launching Pinggy Direct Public Tunnel..."
         TOKEN="${{ github.event.inputs.tunnel_token }}"
-        SSH_TARGET="a.pinggy.io"
+        RDP_TARGET="tcp@a.pinggy.io"
+        WEB_TARGET="a.pinggy.io"
         if [ -n "$TOKEN" ]; then
-            SSH_TARGET="${TOKEN}@a.pinggy.io"
+            RDP_TARGET="tcp+${TOKEN}@a.pinggy.io"
+            WEB_TARGET="${TOKEN}@a.pinggy.io"
         fi
-        ssh -p 443 -R0:localhost:3389 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -T $SSH_TARGET > /tmp/pinggy_rdp.log 2>&1 &
-        ssh -p 443 -R0:localhost:6080 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -T $SSH_TARGET > /tmp/pinggy_web.log 2>&1 &
+        ssh -p 443 -R0:localhost:3389 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -T $RDP_TARGET > /tmp/pinggy_rdp.log 2>&1 &
+        ssh -p 443 -R0:localhost:6080 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -T $WEB_TARGET > /tmp/pinggy_web.log 2>&1 &
         sleep 8
 
-        ENDPOINT=$(grep -oE 'tcp://[^ ]+' /tmp/pinggy_rdp.log | head -n 1)
-        if [ -z "$ENDPOINT" ]; then
-            ENDPOINT=$(grep -oE '[a-zA-Z0-9.-]+\.a\.pinggy\.link:[0-9]+' /tmp/pinggy_rdp.log | head -n 1)
-        fi
-        WEB_HOST=$(grep -oE 'https://[a-zA-Z0-9.-]+\.a\.pinggy\.link' /tmp/pinggy_web.log | head -n 1)
+        ENDPOINT=$(grep -oE 'tcp://[a-zA-Z0-9.-]+:[0-9]+' /tmp/pinggy_rdp.log | head -n 1)
+        WEB_HOST=$(grep -oE 'https://[a-zA-Z0-9.-]+\.(free\.pinggy\.net|pinggy-free\.link|pinggy\.link)' /tmp/pinggy_web.log | head -n 1)
         CLEAN=$(echo "$ENDPOINT" | sed 's/tcp:\/\///')
         HOST=$(echo "$CLEAN" | cut -d':' -f1)
         PORT=$(echo "$CLEAN" | cut -d':' -f2)
         if [ -n "$WEB_HOST" ]; then
-          WEB_URL="${WEB_HOST}/vnc.html"
+          WEB_URL="${WEB_HOST}/vnc.html?autoconnect=true&resize=scale"
         else
-          WEB_URL="http://${HOST}:6080/vnc.html"
+          WEB_URL="http://${HOST}:6080/vnc.html?autoconnect=true&resize=scale"
         fi
 
         echo "======================================================"
