@@ -159,6 +159,7 @@ jobs:
         fi
 
         unset DBUS_SESSION_BUS_ADDRESS
+        unset XDG_RUNTIME_DIR
         unset SESSION_MANAGER
         export XDG_CURRENT_DESKTOP="XFCE"
         export XDG_SESSION_DESKTOP="xfce"
@@ -171,6 +172,7 @@ jobs:
         sudo bash -c 'cat > /home/m11dev/.xsession << "EOF"
         #!/bin/sh
         unset DBUS_SESSION_BUS_ADDRESS
+        unset XDG_RUNTIME_DIR
         unset SESSION_MANAGER
         export XDG_CURRENT_DESKTOP="XFCE"
         export XDG_SESSION_DESKTOP="xfce"
