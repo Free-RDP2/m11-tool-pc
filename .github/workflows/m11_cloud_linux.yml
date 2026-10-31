@@ -204,15 +204,10 @@ jobs:
         # Cleanly restart XRDP services
         sudo systemctl restart xrdp xrdp-sesman 2>/dev/null || sudo service xrdp restart 2>/dev/null || true
 
-        # Start Virtual Framebuffer on :0 and HTML5 NoVNC Web Desktop on port 6080
-        echo ">>> Launching HTML5 NoVNC Web Desktop on port 6080... <<<"
-        sudo Xvfb :0 -screen 0 1280x720x24 -ac +extension GLX +render -noreset > /dev/null 2>&1 &
-        sleep 2
-        sudo -u m11dev DISPLAY=:0 dbus-launch --exit-with-session startxfce4 > /dev/null 2>&1 &
-        sleep 2
-        sudo -u m11dev x11vnc -display :0 -forever -shared -rfbport 5900 -nopw -bg > /dev/null 2>&1 &
+        # Start HTML5 NoVNC Web Gateway on port 6080
+        echo ">>> Launching HTML5 NoVNC Web Gateway on port 6080... <<<"
         sudo websockify --web /usr/share/novnc 6080 localhost:5900 > /dev/null 2>&1 &
-        echo "XRDP (Port 3389) and NoVNC (Port 6080) are active!"
+        echo "XRDP (Port 3389) and NoVNC Gateway (Port 6080) are active!"
     - name: 3. Restore User Persistent State & Cloud Files
       run: |
         echo ">>> Restoring User Persistent Files from Cloud State... <<<"
